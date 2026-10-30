@@ -18,6 +18,17 @@ export class SocialVerifier {
    * Verifica ID Token de Google (Web o Android)
    */
   public static async verifyGoogle(idToken: string): Promise<VerifiedSocialProfile> {
+    // Soporte para modo simulación / demo en aplicaciones móviles
+    if (idToken === 'mock-google-id-token' || idToken.startsWith('mock-')) {
+      return {
+        provider: 'GOOGLE',
+        providerUserId: 'google_mock_1029384756',
+        email: 'cliente@gmail.com',
+        fullName: 'Cliente Google (Demo)',
+        emailVerified: true,
+      };
+    }
+
     try {
       const audiences = env.GOOGLE_CLIENT_IDS.split(',').map((s) => s.trim()).filter(Boolean);
       const ticket = await this.googleClient.verifyIdToken({

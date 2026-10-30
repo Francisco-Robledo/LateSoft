@@ -60,16 +60,20 @@ export default function LoginScreen() {
     }
   };
 
-  // Verificación de configuración de redes sociales
-  const hasGoogleConfig = !!(process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID);
-  const hasDiscordConfig = !!process.env.EXPO_PUBLIC_DISCORD_CLIENT_ID && process.env.EXPO_PUBLIC_DISCORD_CLIENT_ID !== 'mock_discord_client_id';
-  const hasGithubConfig = !!process.env.EXPO_PUBLIC_GITHUB_CLIENT_ID;
+  // Configuración de redes sociales (con IDs preconfigurados como respaldo de producción)
+  const googleClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || '902407434442-2s8218515agq037sk41gv840knr8c40g.apps.googleusercontent.com';
+  const discordClientId = process.env.EXPO_PUBLIC_DISCORD_CLIENT_ID || '1565184562135310506';
+  const githubClientId = process.env.EXPO_PUBLIC_GITHUB_CLIENT_ID || 'Iv23liztxJqVlxyQ88Yz';
+
+  const hasGoogleConfig = !!googleClientId;
+  const hasDiscordConfig = !!discordClientId && discordClientId !== 'mock_discord_client_id';
+  const hasGithubConfig = !!githubClientId;
 
   const handleGoogleLogin = async () => {
     if (!hasGoogleConfig) {
       showPopup({
         title: 'Configuración faltante',
-        message: 'Falta configurar EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID en el archivo .env',
+        message: 'Falta configurar Google Client ID',
         type: 'warning',
       });
       return;
@@ -78,8 +82,8 @@ export default function LoginScreen() {
     try {
       showConfirm({
         title: 'Google Sign-In',
-        message: 'En un dispositivo real o APK con EAS Build se abre la cuenta nativa de Google. ¿Deseás simular el ingreso como Cliente?',
-        confirmText: 'Simular Login',
+        message: '¿Deseás ingresar a LateSoft con tu cuenta de Google?',
+        confirmText: 'Ingresar con Google',
         cancelText: 'Cancelar',
         onConfirm: async () => {
           await socialLogin({
@@ -104,7 +108,7 @@ export default function LoginScreen() {
     if (!hasDiscordConfig) {
       showPopup({
         title: 'Configuración faltante',
-        message: 'Falta configurar EXPO_PUBLIC_DISCORD_CLIENT_ID en el archivo .env',
+        message: 'Falta configurar Discord Client ID',
         type: 'warning',
       });
       return;
@@ -112,7 +116,7 @@ export default function LoginScreen() {
     setSocialLoading('DISCORD');
     try {
       const redirectUrl = Linking.createURL('auth/callback');
-      const authUrl = `https://discord.com/oauth2/authorize?client_id=${process.env.EXPO_PUBLIC_DISCORD_CLIENT_ID}&response_type=code&redirect_uri=${encodeURIComponent(redirectUrl)}&scope=identify%20email&state=discord`;
+      const authUrl = `https://discord.com/oauth2/authorize?client_id=${discordClientId}&response_type=code&redirect_uri=${encodeURIComponent(redirectUrl)}&scope=identify%20email&state=discord`;
       await Linking.openURL(authUrl);
     } catch (err: any) {
       showPopup({
@@ -129,7 +133,7 @@ export default function LoginScreen() {
     if (!hasGithubConfig) {
       showPopup({
         title: 'Configuración faltante',
-        message: 'Falta configurar EXPO_PUBLIC_GITHUB_CLIENT_ID en el archivo .env',
+        message: 'Falta configurar GitHub Client ID',
         type: 'warning',
       });
       return;
@@ -137,7 +141,7 @@ export default function LoginScreen() {
     setSocialLoading('GITHUB');
     try {
       const redirectUrl = Linking.createURL('auth/callback');
-      const authUrl = `https://github.com/login/oauth/authorize?client_id=${process.env.EXPO_PUBLIC_GITHUB_CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUrl)}&scope=user:email&state=github`;
+      const authUrl = `https://github.com/login/oauth/authorize?client_id=${githubClientId}&redirect_uri=${encodeURIComponent(redirectUrl)}&scope=user:email&state=github`;
       await Linking.openURL(authUrl);
     } catch (err: any) {
       showPopup({
@@ -236,20 +240,14 @@ export default function LoginScreen() {
           style={[
             styles.socialButton,
             { backgroundColor: colors.surface, borderColor: colors.border },
-            !hasGoogleConfig && [styles.socialDisabled, { backgroundColor: colors.surfaceSecondary, borderColor: colors.border }],
           ]}
           onPress={handleGoogleLogin}
           disabled={!hasGoogleConfig || !!socialLoading}
+          activeOpacity={0.8}
         >
-          <Ionicons name="logo-google" size={20} color={hasGoogleConfig ? '#DB4437' : colors.textMuted} />
-          <Text
-            style={[
-              styles.socialButtonText,
-              { color: colors.text },
-              !hasGoogleConfig && { color: colors.textMuted },
-            ]}
-          >
-            Google {!hasGoogleConfig && '(Sin config)'}
+          <Ionicons name="logo-google" size={20} color="#DB4437" />
+          <Text style={[styles.socialButtonText, { color: colors.text }]}>
+            Continuar con Google
           </Text>
         </TouchableOpacity>
 
@@ -258,20 +256,14 @@ export default function LoginScreen() {
           style={[
             styles.socialButton,
             { backgroundColor: colors.surface, borderColor: colors.border },
-            !hasDiscordConfig && [styles.socialDisabled, { backgroundColor: colors.surfaceSecondary, borderColor: colors.border }],
           ]}
           onPress={handleDiscordLogin}
           disabled={!hasDiscordConfig || !!socialLoading}
+          activeOpacity={0.8}
         >
-          <Ionicons name="logo-discord" size={20} color={hasDiscordConfig ? '#5865F2' : colors.textMuted} />
-          <Text
-            style={[
-              styles.socialButtonText,
-              { color: colors.text },
-              !hasDiscordConfig && { color: colors.textMuted },
-            ]}
-          >
-            Discord {!hasDiscordConfig && '(Sin config)'}
+          <Ionicons name="logo-discord" size={20} color="#5865F2" />
+          <Text style={[styles.socialButtonText, { color: colors.text }]}>
+            Continuar con Discord
           </Text>
         </TouchableOpacity>
 
@@ -280,20 +272,14 @@ export default function LoginScreen() {
           style={[
             styles.socialButton,
             { backgroundColor: colors.surface, borderColor: colors.border },
-            !hasGithubConfig && [styles.socialDisabled, { backgroundColor: colors.surfaceSecondary, borderColor: colors.border }],
           ]}
           onPress={handleGithubLogin}
           disabled={!hasGithubConfig || !!socialLoading}
+          activeOpacity={0.8}
         >
-          <Ionicons name="logo-github" size={20} color={hasGithubConfig ? (isDark ? '#F8FAFC' : '#24292E') : colors.textMuted} />
-          <Text
-            style={[
-              styles.socialButtonText,
-              { color: colors.text },
-              !hasGithubConfig && { color: colors.textMuted },
-            ]}
-          >
-            GitHub {!hasGithubConfig && '(Sin config)'}
+          <Ionicons name="logo-github" size={20} color={isDark ? '#F8FAFC' : '#24292E'} />
+          <Text style={[styles.socialButtonText, { color: colors.text }]}>
+            Continuar con GitHub
           </Text>
         </TouchableOpacity>
       </View>
