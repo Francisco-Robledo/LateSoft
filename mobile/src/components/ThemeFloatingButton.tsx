@@ -8,6 +8,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { usePathname } from 'expo-router';
 import * as Haptics from 'expo-haptics';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
 
 export interface ThemeFloatingButtonProps {
@@ -23,6 +24,7 @@ export function ThemeFloatingButton({
 }: ThemeFloatingButtonProps) {
   const { isDark, toggleTheme, colors } = useTheme();
   const pathname = usePathname() || '';
+  const insets = useSafeAreaInsets();
 
   // Detección de pantallas con barra de pestañas (Tabs) inferior
   // KDS, Login, Register y SplashScreen son a pantalla completa sin tabs
@@ -38,10 +40,11 @@ export function ThemeFloatingButton({
     return null;
   }
 
-  // Si no se especifica bottomOffset: 68px para flotar justo sobre las tabs (56px), o 16px en fullscreen/KDS
-  const calculatedBottom = bottomOffset !== undefined
-    ? bottomOffset
-    : (isFullScreenWithoutTabs ? 16 : 68);
+  const safeBottom = Math.max(insets.bottom, 0);
+  // Con tabs: 56px de tab + safeBottom + 12px de margen
+  // Sin tabs: safeBottom + 16px
+  const defaultBottom = isFullScreenWithoutTabs ? (safeBottom + 16) : (56 + safeBottom + 12);
+  const calculatedBottom = bottomOffset !== undefined ? bottomOffset : defaultBottom;
 
   const handlePress = async () => {
     try {

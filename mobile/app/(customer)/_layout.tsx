@@ -1,12 +1,17 @@
 import React from 'react';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useCart } from '../../src/context/CartContext';
 import { useTheme } from '../../src/context/ThemeContext';
 
 export default function CustomerLayout() {
   const { totalItemsCount } = useCart();
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
+
+  const bottomInset = Math.max(insets.bottom, 8);
+  const tabHeight = 56 + bottomInset;
 
   return (
     <Tabs
@@ -20,19 +25,24 @@ export default function CustomerLayout() {
         tabBarStyle: {
           backgroundColor: colors.surface,
           borderTopColor: colors.border,
-          height: 56,
-          paddingBottom: 0,
-          paddingTop: 0,
+          height: tabHeight,
+          paddingBottom: bottomInset,
+          paddingTop: 6,
           maxWidth: 500,
           width: '100%',
           alignSelf: 'center',
           justifyContent: 'center',
+          elevation: 8,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: -2 },
+          shadowOpacity: 0.1,
+          shadowRadius: 4,
         },
         tabBarItemStyle: {
           justifyContent: 'center',
           alignItems: 'center',
           maxWidth: 90,
-          height: 56,
+          height: 48,
         },
       }}
     >

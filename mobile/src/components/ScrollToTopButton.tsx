@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { usePathname } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
 
 export interface ScrollToTopButtonProps {
@@ -28,6 +29,7 @@ export function ScrollToTopButton({
 }: ScrollToTopButtonProps) {
   const { colors, isDark } = useTheme();
   const pathname = usePathname() || '';
+  const insets = useSafeAreaInsets();
   const anim = useRef(new Animated.Value(0)).current;
 
   // Detección de pantallas a pantalla completa sin barra de navegación inferior
@@ -38,12 +40,10 @@ export function ScrollToTopButton({
     pathname === '/' ||
     pathname.includes('/callback');
 
-  // En pantallas con Tabs, la pantalla ya está 56px arriba del borde de ventana.
-  // El botón de tema (en RootLayout) está a 68px de la ventana (56 tab + 12 = top a 56px sobre tab).
-  // Para quedar exactamente a 8px de separación vertical arriba del botón de tema:
-  // Con Tabs: bottom = 64px (56 + 8).
-  // Sin Tabs: bottom = 68px (16 + 44 + 8).
-  const defaultBottom = isFullScreenWithoutTabs ? 68 : 64;
+  // En pantallas con Tabs, la pantalla ya está contenida sobre las tabs.
+  // Colocamos el botón de volver arriba justo arriba del botón de tema (44px de alto + 8px separación)
+  const safeBottom = Math.max(insets.bottom, 0);
+  const defaultBottom = isFullScreenWithoutTabs ? (safeBottom + 68) : (safeBottom + 64);
   const calculatedBottom = bottomOffset !== undefined ? bottomOffset : defaultBottom;
 
   useEffect(() => {
