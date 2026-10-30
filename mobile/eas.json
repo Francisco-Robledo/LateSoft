@@ -13,12 +13,15 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://api.latesoft.com.ar"
+        "EXPO_PUBLIC_API_URL": "https://latesoft-api.onrender.com"
       }
     },
     "production": {
       "android": {
         "buildType": "app-bundle"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://latesoft-api.onrender.com"
       }
     }
   },
