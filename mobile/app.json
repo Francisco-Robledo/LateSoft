@@ -1,0 +1,58 @@
+{
+  "expo": {
+    "name": "LateSoft Cafeterías",
+    "slug": "latesoft-cafeteria",
+    "version": "1.0.0",
+    "orientation": "default",
+    "icon": "./assets/icon.png",
+    "scheme": "latesoft",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#FAF8F5"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.latesoft.cafeteria",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Necesitamos tu ubicación para sugerirte la sucursal de LateSoft más cercana y calcular la distancia.",
+        "NSCameraUsageDescription": "Necesitamos acceso a tu cámara para escanear el código QR de la sucursal o mesa."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#FAF8F5"
+      },
+      "package": "com.latesoft.cafeteria",
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "CAMERA"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "LateSoft utiliza tu ubicación para encontrar la sucursal más cercana en tu ciudad."
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "LateSoft necesita tu cámara para escanear el código QR en el mostrador o mesa de la sucursal."
+        }
+      ],
+      "expo-asset",
+      "expo-font"
+    ]
+  }
+}
