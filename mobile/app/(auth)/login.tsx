@@ -26,11 +26,18 @@ import { loginFormSchema } from '../../src/utils/validation';
 
 type LoginFormData = z.infer<typeof loginFormSchema>;
 
-function getOAuthRedirectUri(): string {
+const DEFAULT_WEB_URL = 'https://latesoft-mobile.vercel.app';
+
+function getWebBaseUrl(): string {
   if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.origin) {
-    return `${window.location.origin}/auth/callback`;
+    return window.location.origin;
   }
-  return Linking.createURL('auth/callback');
+  return process.env.EXPO_PUBLIC_WEB_URL || DEFAULT_WEB_URL;
+}
+
+function getOAuthRedirectUri(): string {
+  const base = getWebBaseUrl();
+  return `${base}/auth/callback`;
 }
 
 async function openOAuthUrl(authUrl: string): Promise<void> {
@@ -99,6 +106,8 @@ export default function LoginScreen() {
     setSocialLoading('GOOGLE');
     try {
       const redirectUrl = getOAuthRedirectUri();
+      const isNativeMobile = Platform.OS !== 'web';
+      const state = isNativeMobile ? 'google_mobile' : 'google';
       const nonce = `${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`;
       const authUrl =
         `https://accounts.google.com/o/oauth2/v2/auth` +
@@ -107,7 +116,7 @@ export default function LoginScreen() {
         `&response_type=id_token` +
         `&scope=${encodeURIComponent('openid email profile')}` +
         `&nonce=${encodeURIComponent(nonce)}` +
-        `&state=google` +
+        `&state=${encodeURIComponent(state)}` +
         `&prompt=select_account`;
 
       await openOAuthUrl(authUrl);
@@ -134,13 +143,15 @@ export default function LoginScreen() {
     setSocialLoading('DISCORD');
     try {
       const redirectUrl = getOAuthRedirectUri();
+      const isNativeMobile = Platform.OS !== 'web';
+      const state = isNativeMobile ? 'discord_mobile' : 'discord';
       const authUrl =
         `https://discord.com/oauth2/authorize` +
         `?client_id=${encodeURIComponent(discordClientId)}` +
         `&response_type=code` +
         `&redirect_uri=${encodeURIComponent(redirectUrl)}` +
         `&scope=${encodeURIComponent('identify email')}` +
-        `&state=discord`;
+        `&state=${encodeURIComponent(state)}`;
       await openOAuthUrl(authUrl);
     } catch (err: any) {
       setSocialLoading(null);
@@ -165,12 +176,14 @@ export default function LoginScreen() {
     setSocialLoading('GITHUB');
     try {
       const redirectUrl = getOAuthRedirectUri();
+      const isNativeMobile = Platform.OS !== 'web';
+      const state = isNativeMobile ? 'github_mobile' : 'github';
       const authUrl =
         `https://github.com/login/oauth/authorize` +
         `?client_id=${encodeURIComponent(githubClientId)}` +
         `&redirect_uri=${encodeURIComponent(redirectUrl)}` +
         `&scope=${encodeURIComponent('user:email')}` +
-        `&state=github`;
+        `&state=${encodeURIComponent(state)}`;
       await openOAuthUrl(authUrl);
     } catch (err: any) {
       setSocialLoading(null);

@@ -1,16 +1,23 @@
 import React, { useEffect, useState } from 'react';
-import { Platform } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import * as Linking from 'expo-linking';
 import { LoadingView } from '../../src/components/LoadingView';
 import { useAuth } from '../../src/context/AuthContext';
 import { usePopup } from '../../src/context/PopupContext';
 
-function getOAuthRedirectUri(): string {
+const DEFAULT_WEB_URL = 'https://latesoft-mobile.vercel.app';
+
+function getWebBaseUrl(): string {
   if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.origin) {
-    return `${window.location.origin}/auth/callback`;
+    return window.location.origin;
   }
-  return Linking.createURL('auth/callback');
+  return process.env.EXPO_PUBLIC_WEB_URL || DEFAULT_WEB_URL;
+}
+
+function getOAuthRedirectUri(): string {
+  const base = getWebBaseUrl();
+  return `${base}/auth/callback`;
 }
 
 export default function AuthCallbackScreen() {
@@ -27,6 +34,7 @@ export default function AuthCallbackScreen() {
   const { socialLogin } = useAuth();
   const { showPopup } = usePopup();
   const [hasProcessed, setHasProcessed] = useState(false);
+  const [redirectToAppUrl, setRedirectToAppUrl] = useState<string | null>(null);
 
   // Extraer fragmentos URL (#id_token=...&state=google) para OAuth2 / OpenID Connect de Google
   const getHashParams = (): URLSearchParams => {
@@ -50,9 +58,9 @@ export default function AuthCallbackScreen() {
     (params.error_description as string) || hashParams.get('error_description') || '';
 
   const provider: 'GOOGLE' | 'DISCORD' | 'GITHUB' =
-    stateParam === 'google' || !!idToken
+    stateParam.startsWith('google') || !!idToken
       ? 'GOOGLE'
-      : stateParam === 'discord'
+      : stateParam.startsWith('discord')
       ? 'DISCORD'
       : 'GITHUB';
 
@@ -63,6 +71,21 @@ export default function AuthCallbackScreen() {
     if (hasProcessed) return;
 
     async function handleOAuthCallback() {
+      // 1. Si la redirección llega al navegador Web en el celular pero el usuario inició desde la App (APK)
+      if (Platform.OS === 'web' && typeof window !== 'undefined' && stateParam.endsWith('_mobile')) {
+        setHasProcessed(true);
+        const hash = window.location.hash || '';
+        const search = window.location.search || '';
+        const appDeepLink = `latesoft://auth/callback${hash || search}`;
+        try {
+          window.location.href = appDeepLink;
+        } catch {
+          // Si el navegador restringe la redirección automática, el botón en pantalla permite abrirla
+        }
+        setRedirectToAppUrl(appDeepLink);
+        return;
+      }
+
       setHasProcessed(true);
 
       // Limpiar el hash de la barra de direcciones en Web por seguridad
@@ -127,6 +150,7 @@ export default function AuthCallbackScreen() {
     handleOAuthCallback();
   }, [
     hasProcessed,
+    stateParam,
     oauthError,
     oauthErrorDesc,
     provider,
@@ -139,5 +163,68 @@ export default function AuthCallbackScreen() {
     showPopup,
   ]);
 
+  if (redirectToAppUrl) {
+    return (
+      <View style={styles.redirectContainer}>
+        <Text style={styles.redirectTitle}>¡Identificación exitosa!</Text>
+        <Text style={styles.redirectSubtitle}>
+          Abriendo la aplicación LateSoft en tu teléfono...
+        </Text>
+        <TouchableOpacity
+          style={styles.openAppButton}
+          onPress={() => {
+            if (typeof window !== 'undefined') {
+              window.location.href = redirectToAppUrl;
+            }
+          }}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.openAppButtonText}>Abrir la app LateSoft</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
   return <LoadingView message={`Verificando autenticación con ${providerName}...`} />;
 }
+
+const styles = StyleSheet.create({
+  redirectContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+    backgroundColor: '#FAF8F5',
+  },
+  redirectTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#2A1810',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  redirectSubtitle: {
+    fontSize: 15,
+    color: '#7D5A44',
+    textAlign: 'center',
+    marginBottom: 24,
+    maxWidth: 360,
+    lineHeight: 22,
+  },
+  openAppButton: {
+    backgroundColor: '#6F4E37',
+    paddingVertical: 14,
+    paddingHorizontal: 28,
+    borderRadius: 12,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+  },
+  openAppButtonText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 16,
+  },
+});

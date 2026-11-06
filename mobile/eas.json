@@ -13,6 +13,7 @@
         "buildType": "apk"
       },
       "env": {
+        "EXPO_PUBLIC_WEB_URL": "https://latesoft-mobile.vercel.app",
         "EXPO_PUBLIC_API_URL": "https://latesoft-api.onrender.com",
         "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "902407434442-2s8218515agq037sk41gv840knr8c40g.apps.googleusercontent.com",
         "EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID": "mock_google_android_client_id.apps.googleusercontent.com",
@@ -26,6 +27,7 @@
         "buildType": "app-bundle"
       },
       "env": {
+        "EXPO_PUBLIC_WEB_URL": "https://latesoft-mobile.vercel.app",
         "EXPO_PUBLIC_API_URL": "https://latesoft-api.onrender.com",
         "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "902407434442-2s8218515agq037sk41gv840knr8c40g.apps.googleusercontent.com",
         "EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID": "mock_google_android_client_id.apps.googleusercontent.com",
