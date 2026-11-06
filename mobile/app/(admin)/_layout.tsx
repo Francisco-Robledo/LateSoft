@@ -37,20 +37,13 @@ export default function AdminLayout() {
             shadowOpacity: 0.08,
             shadowRadius: 4,
           },
-          tabBarItemStyle: isDesktop
-            ? {
-                justifyContent: 'center',
-                alignItems: 'center',
-                maxWidth: 160,
-                height: 48,
-                paddingHorizontal: 12,
-              }
-            : {
-                justifyContent: 'center',
-                alignItems: 'center',
-                maxWidth: 90,
-                height: 48,
-              },
+          tabBarItemStyle: {
+            flex: 1,
+            justifyContent: 'center',
+            alignItems: 'center',
+            height: 48,
+            paddingHorizontal: isDesktop ? 12 : 4,
+          },
           tabBarLabelStyle: isDesktop
             ? {
                 fontSize: 12,
