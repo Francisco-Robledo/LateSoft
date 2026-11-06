@@ -183,7 +183,7 @@ export default function LoginScreen() {
   };
 
   return (
-    <Screen scrollable contentContainerStyle={styles.container}>
+    <Screen scrollable contentContainerStyle={styles.container} maxWidth={480}>
       <View style={styles.header}>
         <Image
           source={require('../../assets/logo.png')}

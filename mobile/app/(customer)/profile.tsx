@@ -115,7 +115,7 @@ export default function CustomerProfileScreen() {
   };
 
   return (
-    <Screen scrollable showScrollToTop={false} style={styles.screen} contentContainerStyle={styles.container}>
+    <Screen scrollable showScrollToTop={false} style={styles.screen} contentContainerStyle={styles.container} maxWidth={780}>
       <View style={styles.header}>
         <View style={[styles.avatar, { backgroundColor: colors.primary }]}>
           <Ionicons name="person" size={40} color="#FFFFFF" />

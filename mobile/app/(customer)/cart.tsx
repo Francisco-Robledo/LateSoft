@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   TextInput,
   Image,
+  useWindowDimensions,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -38,6 +39,8 @@ export default function CartScreen() {
     clearCart,
   } = useCart();
   const { selectedBranch } = useBranch();
+  const { width } = useWindowDimensions();
+  const isDesktop = width >= 768;
 
   const [orderType, setOrderType] = useState<'TAKE_AWAY' | 'DINE_IN'>('TAKE_AWAY');
   const [generalNotes, setGeneralNotes] = useState('');
@@ -216,7 +219,7 @@ export default function CartScreen() {
 
   return (
     <Screen style={[styles.screen, { backgroundColor: colors.background }]}>
-      <View style={styles.header}>
+      <View style={[styles.header, isDesktop && { maxWidth: 960, width: '100%', alignSelf: 'center' }]}>
         <Text style={[styles.headerTitle, { color: colors.text }]}>Mi Carrito</Text>
         <TouchableOpacity
           onPress={clearCart}
@@ -230,7 +233,7 @@ export default function CartScreen() {
       <FlatList
         data={items}
         keyExtractor={(item) => String(item.branchProductId)}
-        contentContainerStyle={styles.list}
+        contentContainerStyle={[styles.list, isDesktop && { maxWidth: 960, width: '100%', alignSelf: 'center' }]}
         ListHeaderComponent={
           <View style={[styles.branchBanner, { backgroundColor: colors.surfaceSecondary }]}>
             <Ionicons name="storefront" size={16} color={colors.primary} />

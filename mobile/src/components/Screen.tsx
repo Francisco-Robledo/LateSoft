@@ -26,7 +26,7 @@ export function Screen({
   scrollable = false,
   style,
   contentContainerStyle,
-  maxWidth = 720,
+  maxWidth = 1280,
   showScrollToTop = true,
 }: ScreenProps) {
   const { width } = useWindowDimensions();
@@ -35,7 +35,7 @@ export function Screen({
   const { scrollRef, showScrollTop, handleScroll, scrollToTop } = useScrollToTop(160);
 
   const innerContent = (
-    <View style={[styles.inner, isWide && { maxWidth, width: '100%', alignSelf: 'center' }]}>
+    <View style={[styles.inner, isWide ? { maxWidth, width: '100%', alignSelf: 'center' } : { width: '100%' }]}>
       {children}
     </View>
   );
@@ -70,13 +70,16 @@ export function Screen({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    width: '100%',
   },
   scrollWrapper: {
     flex: 1,
     position: 'relative',
+    width: '100%',
   },
   scroll: {
     flex: 1,
+    width: '100%',
   },
   scrollContent: {
     flexGrow: 1,

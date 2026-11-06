@@ -9,6 +9,7 @@ import {
   Modal,
   RefreshControl,
   TextInput,
+  useWindowDimensions,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -50,6 +51,8 @@ export default function CustomerHomeScreen() {
   const { colors, isDark } = useTheme();
   const { selectedBranch, isLoading: isBranchLoading, refreshBranches } = useBranch();
   const { addItem } = useCart();
+  const { width } = useWindowDimensions();
+  const isDesktop = width >= 768;
 
   const [categories, setCategories] = useState<MenuCategory[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -163,6 +166,7 @@ export default function CustomerHomeScreen() {
       onPress={() => handleOpenAddModal(item)}
       style={[
         styles.carouselCard,
+        isDesktop && { width: 232, marginBottom: 16 },
         {
           backgroundColor: isDark ? colors.surfaceSecondary : colors.surface,
           borderColor: colors.border,
@@ -217,7 +221,8 @@ export default function CustomerHomeScreen() {
     <Screen style={styles.screen}>
       {/* Barra fija superior con datos de la sucursal activa */}
       <View style={[styles.branchHeader, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-        <View style={styles.branchInfo}>
+        <View style={[styles.branchHeaderInner, isDesktop && { maxWidth: 1200, width: '100%', alignSelf: 'center' }]}>
+          <View style={styles.branchInfo}>
           <View style={styles.branchNameRow}>
             <Ionicons name="storefront-outline" size={18} color={colors.primary} />
             <Text style={[styles.branchName, { color: colors.text }]} numberOfLines={1}>
@@ -245,11 +250,12 @@ export default function CustomerHomeScreen() {
           <Ionicons name="swap-horizontal" size={16} color={colors.primary} />
           <Text style={[styles.changeBranchText, { color: colors.primary }]}>Cambiar</Text>
         </TouchableOpacity>
+        </View>
       </View>
 
       {/* Barra de búsqueda interactiva */}
       <View style={[styles.searchBarContainer, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-        <View style={[styles.searchInputWrapper, { backgroundColor: colors.surfaceSecondary, borderColor: colors.border }]}>
+        <View style={[styles.searchInputWrapper, isDesktop && { maxWidth: 1200, width: '100%', alignSelf: 'center' }, { backgroundColor: colors.surfaceSecondary, borderColor: colors.border }]}>
           <Ionicons name="search-outline" size={18} color={colors.textSecondary} style={{ marginRight: 8 }} />
           <TextInput
             style={[styles.searchInput, { color: colors.text }]}
@@ -279,8 +285,10 @@ export default function CustomerHomeScreen() {
           onScroll={handleScroll}
           scrollEventThrottle={16}
           data={filteredProducts}
+          key={isDesktop ? (width >= 1024 ? 'grid-3' : 'grid-2') : 'list-1'}
+          numColumns={isDesktop ? (width >= 1024 ? 3 : 2) : 1}
           keyExtractor={(item) => String(item.branch_product_id)}
-          contentContainerStyle={styles.searchListContent}
+          contentContainerStyle={[styles.searchListContent, isDesktop && { maxWidth: 1200, width: '100%', alignSelf: 'center' }]}
           ListHeaderComponent={
             <View style={styles.searchHeaderRow}>
               <Text style={[styles.searchResultCount, { color: colors.textSecondary }]}>
@@ -298,7 +306,7 @@ export default function CustomerHomeScreen() {
             />
           }
           renderItem={({ item }) => (
-            <Card style={styles.productCard}>
+            <Card style={[styles.productCard, isDesktop && { flex: 1, margin: 8 }]}>
               <Image source={{ uri: item.image_url }} style={styles.productImage} />
               <View style={styles.productContent}>
                 <View style={styles.productHeader}>
@@ -339,7 +347,7 @@ export default function CustomerHomeScreen() {
           scrollEventThrottle={16}
           data={categories.filter((cat) => cat.items && cat.items.length > 0)}
           keyExtractor={(cat) => String(cat.id)}
-          contentContainerStyle={styles.carouselsContainer}
+          contentContainerStyle={[styles.carouselsContainer, isDesktop && { maxWidth: 1200, width: '100%', alignSelf: 'center' }]}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} />}
           ListEmptyComponent={
             <EmptyState
@@ -364,15 +372,21 @@ export default function CustomerHomeScreen() {
                 </View>
               </View>
 
-              {/* CARRUSEL HORIZONTAL DE PRODUCTOS */}
-              <FlatList
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                data={category.items}
-                keyExtractor={(item) => String(item.branch_product_id)}
-                contentContainerStyle={styles.horizontalCarouselContent}
-                renderItem={({ item }) => renderCarouselProductCard(item)}
-              />
+              {/* CARRUSEL HORIZONTAL EN CELULAR O GRID ADAPTABLE EN COMPUTADORA */}
+              {isDesktop ? (
+                <View style={[styles.desktopCategoryGrid, { maxWidth: 1200, width: '100%', alignSelf: 'center' }]}>
+                  {category.items.map((item) => renderCarouselProductCard(item))}
+                </View>
+              ) : (
+                <FlatList
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  data={category.items}
+                  keyExtractor={(item) => String(item.branch_product_id)}
+                  contentContainerStyle={styles.horizontalCarouselContent}
+                  renderItem={({ item }) => renderCarouselProductCard(item)}
+                />
+              )}
             </View>
           )}
         />
@@ -531,6 +545,18 @@ const styles = StyleSheet.create({
   changeBranchText: {
     fontSize: 13,
     fontWeight: '600',
+  },
+  branchHeaderInner: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    width: '100%',
+  },
+  desktopCategoryGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 16,
+    paddingHorizontal: 16,
   },
   searchBarContainer: {
     paddingHorizontal: 16,

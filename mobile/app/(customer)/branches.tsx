@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   TextInput,
   Modal,
+  useWindowDimensions,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -23,6 +24,8 @@ import { useTheme } from '../../src/context/ThemeContext';
 export default function BranchesScreen() {
   const router = useRouter();
   const { colors, isDark } = useTheme();
+  const { width } = useWindowDimensions();
+  const isDesktop = width >= 768;
   const { showPopup } = usePopup();
   const {
     branches,
@@ -161,7 +164,7 @@ export default function BranchesScreen() {
       )}
 
       {/* Barra de búsqueda y botón de escanear QR */}
-      <View style={styles.searchRow}>
+      <View style={[styles.searchRow, isDesktop && { maxWidth: 1200, width: '100%', alignSelf: 'center' }]}>
         <View style={[styles.searchBar, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
           <Ionicons name="search-outline" size={18} color={colors.textSecondary} />
           <TextInput
@@ -184,7 +187,7 @@ export default function BranchesScreen() {
       </View>
 
       {/* Ingreso manual alternativo de código QR / Slug */}
-      <View style={styles.manualCodeContainer}>
+      <View style={[styles.manualCodeContainer, isDesktop && { maxWidth: 1200, width: '100%', alignSelf: 'center' }]}>
         <TextInput
           style={[styles.manualInput, { backgroundColor: colors.inputBg, borderColor: colors.border, color: colors.text }]}
           placeholder="¿Tenés el código del local? Ej. palermo-soho"
@@ -205,7 +208,9 @@ export default function BranchesScreen() {
       <FlatList
         data={filteredBranches}
         keyExtractor={(item) => String(item.id)}
-        contentContainerStyle={styles.list}
+        key={isDesktop ? 'branches-grid-2' : 'branches-list-1'}
+        numColumns={isDesktop ? 2 : 1}
+        contentContainerStyle={[styles.list, isDesktop && { maxWidth: 1200, width: '100%', alignSelf: 'center' }]}
         onRefresh={refreshBranches}
         refreshing={false}
         renderItem={({ item }) => {
@@ -214,7 +219,7 @@ export default function BranchesScreen() {
 
           return (
             <Card
-              style={
+              style={[
                 isSelected
                   ? [
                       styles.selectedCard,
@@ -223,8 +228,9 @@ export default function BranchesScreen() {
                         backgroundColor: isDark ? 'rgba(212, 163, 115, 0.14)' : '#FAF5F1',
                       },
                     ]
-                  : undefined
-              }
+                  : undefined,
+                isDesktop && { flex: 1, margin: 8 },
+              ]}
             >
               <TouchableOpacity
                 activeOpacity={0.7}

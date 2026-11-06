@@ -9,6 +9,7 @@ import {
   Modal,
   TextInput,
   Image,
+  useWindowDimensions,
 } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -54,6 +55,8 @@ interface Order {
 
 export default function CustomerOrdersScreen() {
   const { colors, isDark } = useTheme();
+  const { width } = useWindowDimensions();
+  const isDesktop = width >= 768;
   const { showPopup } = usePopup();
   const [orders, setOrders] = useState<Order[]>([]);
   const [refreshing, setRefreshing] = useState(false);
@@ -293,7 +296,7 @@ export default function CustomerOrdersScreen() {
 
   return (
     <Screen style={styles.screen}>
-      <View style={styles.header}>
+      <View style={[styles.header, isDesktop && { maxWidth: 1200, width: '100%', alignSelf: 'center' }]}>
         <Text style={[styles.headerTitle, { color: colors.text }]}>Mis Pedidos</Text>
         <Text style={[styles.headerSubtitle, { color: colors.textSecondary }]}>
           Seguimiento en vivo cada 5 segundos
@@ -306,7 +309,9 @@ export default function CustomerOrdersScreen() {
         scrollEventThrottle={16}
         data={orders}
         keyExtractor={(item) => String(item.id)}
-        contentContainerStyle={styles.list}
+        key={isDesktop ? 'orders-grid-2' : 'orders-list-1'}
+        numColumns={isDesktop ? 2 : 1}
+        contentContainerStyle={[styles.list, isDesktop && { maxWidth: 1200, width: '100%', alignSelf: 'center' }]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} />}
         ListEmptyComponent={
           !loading ? (
@@ -321,7 +326,7 @@ export default function CustomerOrdersScreen() {
           const badgeInfo = getPaymentBadgeInfo(item.payment_status);
 
           return (
-            <Card style={styles.orderCard}>
+            <Card style={[styles.orderCard, isDesktop && { flex: 1, margin: 8 }]}>
               <View style={[styles.orderHeader, { borderBottomColor: colors.border }]}>
                 <View>
                   <Text style={[styles.orderNumber, { color: colors.primary }]}>Pedido #{item.order_number}</Text>

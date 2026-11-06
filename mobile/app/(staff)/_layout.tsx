@@ -8,102 +8,101 @@ import { useTheme } from '../../src/context/ThemeContext';
 
 export default function StaffLayout() {
   const { role } = useAuth();
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
-  const isDesktop = width > 1140;
+  const isDesktop = width >= 768;
 
   const bottomInset = Math.max(insets.bottom, 8);
-  const tabHeight = 56 + bottomInset;
+  const tabHeight = isDesktop ? 62 : 56 + bottomInset;
 
   return (
-    <View style={[styles.rootContainer, { backgroundColor: isDesktop ? (isDark ? '#140E0A' : '#EFEAE4') : colors.background }]}>
-      <View
-        style={[
-          styles.appFrame,
-          isDesktop && [
-            styles.appFrameDesktop,
-            {
-              backgroundColor: colors.background,
-              borderColor: colors.border,
-            },
-          ],
-        ]}
+    <View style={[styles.rootContainer, { backgroundColor: colors.background }]}>
+      <Tabs
+        screenOptions={{
+          headerShown: false,
+          tabBarShowLabel: isDesktop,
+          tabBarActiveTintColor: colors.primary,
+          tabBarInactiveTintColor: colors.textSecondary,
+          tabBarStyle: {
+            backgroundColor: colors.surface,
+            borderTopColor: colors.border,
+            borderTopWidth: 1,
+            height: tabHeight,
+            paddingBottom: isDesktop ? 8 : bottomInset,
+            paddingTop: 6,
+            width: '100%',
+            justifyContent: 'center',
+            elevation: 8,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: -2 },
+            shadowOpacity: 0.08,
+            shadowRadius: 4,
+          },
+          tabBarItemStyle: isDesktop
+            ? {
+                justifyContent: 'center',
+                alignItems: 'center',
+                maxWidth: 160,
+                height: 48,
+                paddingHorizontal: 12,
+              }
+            : {
+                justifyContent: 'center',
+                alignItems: 'center',
+                maxWidth: 90,
+                height: 48,
+              },
+          tabBarLabelStyle: isDesktop
+            ? {
+                fontSize: 12,
+                fontWeight: '600',
+                marginTop: 2,
+              }
+            : { display: 'none' },
+        }}
       >
-        <Tabs
-          screenOptions={{
-            headerShown: false,
-            tabBarShowLabel: false,
-            tabBarLabel: () => null,
-            tabBarLabelStyle: { display: 'none' },
-            tabBarActiveTintColor: colors.primary,
-            tabBarInactiveTintColor: colors.textSecondary,
-            tabBarStyle: {
-              backgroundColor: colors.surface,
-              borderTopColor: colors.border,
-              height: tabHeight,
-              paddingBottom: bottomInset,
-              paddingTop: 6,
-              maxWidth: 500,
-              width: '100%',
-              alignSelf: 'center',
-              justifyContent: 'center',
-              elevation: 8,
-              shadowColor: '#000',
-              shadowOffset: { width: 0, height: -2 },
-              shadowOpacity: 0.1,
-              shadowRadius: 4,
-            },
-            tabBarItemStyle: {
-              justifyContent: 'center',
-              alignItems: 'center',
-              maxWidth: 90,
-              height: 48,
-            },
+        <Tabs.Screen
+          name="pos"
+          options={{
+            title: 'Caja (POS)',
+            href: ['CASHIER', 'MANAGER', 'ADMIN'].includes(role || '') ? '/pos' : null,
+            tabBarIcon: ({ color, size }) => (
+              <Ionicons name="calculator-outline" size={size} color={color as string} />
+            ),
           }}
-        >
-          <Tabs.Screen
-            name="pos"
-            options={{
-              title: 'Caja (POS)',
-              href: ['CASHIER', 'MANAGER', 'ADMIN'].includes(role || '') ? '/pos' : null,
-              tabBarIcon: ({ color, size }) => (
-                <Ionicons name="calculator-outline" size={size} color={color as string} />
-              ),
-            }}
-          />
-          <Tabs.Screen
-            name="kds"
-            options={{
-              title: 'Comandas (KDS)',
-              href: ['BARISTA', 'MANAGER', 'ADMIN'].includes(role || '') ? '/kds' : null,
-              tabBarIcon: ({ color, size }) => (
-                <Ionicons name="flame-outline" size={size} color={color as string} />
-              ),
-            }}
-          />
-          <Tabs.Screen
-            name="shift"
-            options={{
-              title: 'Turno y Caja',
-              href: ['CASHIER', 'MANAGER', 'ADMIN'].includes(role || '') ? '/shift' : null,
-              tabBarIcon: ({ color, size }) => (
-                <Ionicons name="wallet-outline" size={size} color={color as string} />
-              ),
-            }}
-          />
-          <Tabs.Screen
-            name="manager"
-            options={{
-              title: 'Gestión Local',
-              href: ['MANAGER', 'ADMIN'].includes(role || '') ? '/manager' : null,
-              tabBarIcon: ({ color, size }) => (
-                <Ionicons name="briefcase-outline" size={size} color={color as string} />
-              ),
-            }}
-          />
-        </Tabs>
-      </View>
+        />
+        <Tabs.Screen
+          name="kds"
+          options={{
+            title: 'Comandas (KDS)',
+            href: ['BARISTA', 'MANAGER', 'ADMIN'].includes(role || '') ? '/kds' : null,
+            tabBarIcon: ({ color, size }) => (
+              <Ionicons name="flame-outline" size={size} color={color as string} />
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="shift"
+          options={{
+            title: 'Turno y Caja',
+            href: ['CASHIER', 'MANAGER', 'ADMIN'].includes(role || '') ? '/shift' : null,
+            tabBarIcon: ({ color, size }) => (
+              <Ionicons name="wallet-outline" size={size} color={color as string} />
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="manager"
+          options={{
+            title: 'Gestión Local',
+            href: ['MANAGER', 'ADMIN'].includes(role || '') ? '/manager' : null,
+            tabBarIcon: ({ color, size }) => (
+              <Ionicons name="briefcase-outline" size={size} color={color as string} />
+            ),
+          }}
+        />
+      </Tabs>
     </View>
   );
 }
@@ -111,24 +110,7 @@ export default function StaffLayout() {
 const styles = StyleSheet.create({
   rootContainer: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
     width: '100%',
     height: '100%',
-  },
-  appFrame: {
-    flex: 1,
-    width: '100%',
-    height: '100%',
-  },
-  appFrameDesktop: {
-    maxWidth: 1140,
-    borderLeftWidth: 1,
-    borderRightWidth: 1,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.18,
-    shadowRadius: 24,
-    elevation: 12,
   },
 });
