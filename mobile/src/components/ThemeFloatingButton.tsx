@@ -4,6 +4,7 @@ import {
   StyleSheet,
   ViewStyle,
   Platform,
+  useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { usePathname } from 'expo-router';
@@ -25,6 +26,7 @@ export function ThemeFloatingButton({
   const { isDark, toggleTheme, colors } = useTheme();
   const pathname = usePathname() || '';
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
 
   // Detección de pantallas con barra de pestañas (Tabs) inferior
   // KDS, Login, Register y SplashScreen son a pantalla completa sin tabs
@@ -46,6 +48,15 @@ export function ThemeFloatingButton({
   const defaultBottom = isFullScreenWithoutTabs ? (safeBottom + 16) : (56 + safeBottom + 12);
   const calculatedBottom = bottomOffset !== undefined ? bottomOffset : defaultBottom;
 
+  // En pantallas anchas de PC, si estamos en vista de cliente o login/registro,
+  // posicionar el botón anclado al marco móvil (480px) para que no flote en el vacío del monitor
+  const isMobileSection = !pathname.includes('/staff') && !pathname.includes('/admin');
+  const isDesktop = width > 520;
+  const calculatedRight =
+    isDesktop && isMobileSection
+      ? Math.max(16, (width - 480) / 2 + 16)
+      : rightOffset;
+
   const handlePress = async () => {
     try {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -63,7 +74,7 @@ export function ThemeFloatingButton({
         styles.button,
         {
           bottom: calculatedBottom,
-          right: rightOffset,
+          right: calculatedRight,
           backgroundColor: isDark ? colors.surfaceSecondary : '#FFFFFF',
           borderColor: isDark ? colors.border : 'rgba(0, 0, 0, 0.1)',
         },
