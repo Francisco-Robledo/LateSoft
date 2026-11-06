@@ -5,6 +5,8 @@ import {
   StyleSheet,
   TouchableOpacity,
   Image,
+  Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useForm, Controller } from 'react-hook-form';
@@ -20,28 +22,41 @@ import { ErrorBanner } from '../../src/components/ErrorBanner';
 import { useAuth } from '../../src/context/AuthContext';
 import { usePopup } from '../../src/context/PopupContext';
 import { useTheme } from '../../src/context/ThemeContext';
+import { loginFormSchema } from '../../src/utils/validation';
 
-const loginSchema = z.object({
-  email: z.string().min(1, 'Ingresá tu correo electrónico').email('El correo no es válido'),
-  password: z.string().min(6, 'La contraseña debe tener al menos 6 caracteres'),
-});
+type LoginFormData = z.infer<typeof loginFormSchema>;
 
-type LoginFormData = z.infer<typeof loginSchema>;
+function getOAuthRedirectUri(): string {
+  if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.origin) {
+    return `${window.location.origin}/auth/callback`;
+  }
+  return Linking.createURL('auth/callback');
+}
+
+async function openOAuthUrl(authUrl: string): Promise<void> {
+  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    window.location.assign(authUrl);
+    return;
+  }
+  await Linking.openURL(authUrl);
+}
 
 export default function LoginScreen() {
   const router = useRouter();
   const { colors, isDark } = useTheme();
-  const { login, socialLogin, error, isOffline } = useAuth();
-  const { showPopup, showConfirm } = usePopup();
+  const { login, error, isOffline } = useAuth();
+  const { showPopup } = usePopup();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [socialLoading, setSocialLoading] = useState<string | null>(null);
+  const [socialLoading, setSocialLoading] = useState<'GOOGLE' | 'DISCORD' | 'GITHUB' | null>(null);
 
   const {
     control,
     handleSubmit,
     formState: { errors },
   } = useForm<LoginFormData>({
-    resolver: zodResolver(loginSchema),
+    resolver: zodResolver(loginFormSchema),
+    mode: 'onTouched',
+    reValidateMode: 'onChange',
     defaultValues: {
       email: '',
       password: '',
@@ -51,7 +66,7 @@ export default function LoginScreen() {
   const onSubmit = async (data: LoginFormData) => {
     setIsSubmitting(true);
     try {
-      await login(data.email, data.password);
+      await login(data.email.trim().toLowerCase(), data.password);
       router.replace('/');
     } catch {
       // Error manejado en el contexto
@@ -60,47 +75,49 @@ export default function LoginScreen() {
     }
   };
 
-  // Configuración de redes sociales (con IDs preconfigurados como respaldo de producción)
-  const googleClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || '902407434442-2s8218515agq037sk41gv840knr8c40g.apps.googleusercontent.com';
+  // Credenciales públicas OAuth (con respaldo de producción)
+  const googleClientId =
+    process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ||
+    '902407434442-2s8218515agq037sk41gv840knr8c40g.apps.googleusercontent.com';
   const discordClientId = process.env.EXPO_PUBLIC_DISCORD_CLIENT_ID || '1565184562135310506';
   const githubClientId = process.env.EXPO_PUBLIC_GITHUB_CLIENT_ID || 'Iv23liztxJqVlxyQ88Yz';
 
-  const hasGoogleConfig = !!googleClientId;
+  const hasGoogleConfig = !!googleClientId && !googleClientId.startsWith('mock_');
   const hasDiscordConfig = !!discordClientId && discordClientId !== 'mock_discord_client_id';
-  const hasGithubConfig = !!githubClientId;
+  const hasGithubConfig = !!githubClientId && !githubClientId.startsWith('mock_');
 
   const handleGoogleLogin = async () => {
     if (!hasGoogleConfig) {
       showPopup({
         title: 'Configuración faltante',
-        message: 'Falta configurar Google Client ID',
+        message: 'Falta configurar EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID para iniciar sesión con Google.',
         type: 'warning',
       });
       return;
     }
+
     setSocialLoading('GOOGLE');
     try {
-      showConfirm({
-        title: 'Google Sign-In',
-        message: '¿Deseás ingresar a LateSoft con tu cuenta de Google?',
-        confirmText: 'Ingresar con Google',
-        cancelText: 'Cancelar',
-        onConfirm: async () => {
-          await socialLogin({
-            provider: 'GOOGLE',
-            idToken: 'mock-google-id-token',
-          });
-          router.replace('/');
-        },
-      });
+      const redirectUrl = getOAuthRedirectUri();
+      const nonce = `${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`;
+      const authUrl =
+        `https://accounts.google.com/o/oauth2/v2/auth` +
+        `?client_id=${encodeURIComponent(googleClientId)}` +
+        `&redirect_uri=${encodeURIComponent(redirectUrl)}` +
+        `&response_type=id_token` +
+        `&scope=${encodeURIComponent('openid email profile')}` +
+        `&nonce=${encodeURIComponent(nonce)}` +
+        `&state=google` +
+        `&prompt=select_account`;
+
+      await openOAuthUrl(authUrl);
     } catch (err: any) {
+      setSocialLoading(null);
       showPopup({
         title: 'Error',
-        message: err.message || 'Error en Google Sign-In',
+        message: err.message || 'No se pudo iniciar la autenticación con Google.',
         type: 'error',
       });
-    } finally {
-      setSocialLoading(null);
     }
   };
 
@@ -108,24 +125,30 @@ export default function LoginScreen() {
     if (!hasDiscordConfig) {
       showPopup({
         title: 'Configuración faltante',
-        message: 'Falta configurar Discord Client ID',
+        message: 'Falta configurar Discord Client ID.',
         type: 'warning',
       });
       return;
     }
+
     setSocialLoading('DISCORD');
     try {
-      const redirectUrl = Linking.createURL('auth/callback');
-      const authUrl = `https://discord.com/oauth2/authorize?client_id=${discordClientId}&response_type=code&redirect_uri=${encodeURIComponent(redirectUrl)}&scope=identify%20email&state=discord`;
-      await Linking.openURL(authUrl);
+      const redirectUrl = getOAuthRedirectUri();
+      const authUrl =
+        `https://discord.com/oauth2/authorize` +
+        `?client_id=${encodeURIComponent(discordClientId)}` +
+        `&response_type=code` +
+        `&redirect_uri=${encodeURIComponent(redirectUrl)}` +
+        `&scope=${encodeURIComponent('identify email')}` +
+        `&state=discord`;
+      await openOAuthUrl(authUrl);
     } catch (err: any) {
+      setSocialLoading(null);
       showPopup({
         title: 'Error',
-        message: err.message || 'Error en Discord Login',
+        message: err.message || 'Error en Discord Login.',
         type: 'error',
       });
-    } finally {
-      setSocialLoading(null);
     }
   };
 
@@ -133,24 +156,29 @@ export default function LoginScreen() {
     if (!hasGithubConfig) {
       showPopup({
         title: 'Configuración faltante',
-        message: 'Falta configurar GitHub Client ID',
+        message: 'Falta configurar GitHub Client ID.',
         type: 'warning',
       });
       return;
     }
+
     setSocialLoading('GITHUB');
     try {
-      const redirectUrl = Linking.createURL('auth/callback');
-      const authUrl = `https://github.com/login/oauth/authorize?client_id=${githubClientId}&redirect_uri=${encodeURIComponent(redirectUrl)}&scope=user:email&state=github`;
-      await Linking.openURL(authUrl);
+      const redirectUrl = getOAuthRedirectUri();
+      const authUrl =
+        `https://github.com/login/oauth/authorize` +
+        `?client_id=${encodeURIComponent(githubClientId)}` +
+        `&redirect_uri=${encodeURIComponent(redirectUrl)}` +
+        `&scope=${encodeURIComponent('user:email')}` +
+        `&state=github`;
+      await openOAuthUrl(authUrl);
     } catch (err: any) {
+      setSocialLoading(null);
       showPopup({
         title: 'Error',
-        message: err.message || 'Error en GitHub Login',
+        message: err.message || 'Error en GitHub Login.',
         type: 'error',
       });
-    } finally {
-      setSocialLoading(null);
     }
   };
 
@@ -189,9 +217,11 @@ export default function LoginScreen() {
               placeholder="tu@email.com"
               keyboardType="email-address"
               autoComplete="email"
+              maxLength={120}
+              returnKeyType="next"
               value={value}
               onBlur={onBlur}
-              onChangeText={onChange}
+              onChangeText={(txt) => onChange(txt.replace(/\s/g, ''))}
               error={errors.email?.message}
             />
           )}
@@ -205,6 +235,11 @@ export default function LoginScreen() {
               label="Contraseña"
               placeholder="••••••••"
               isPassword
+              maxLength={72}
+              returnKeyType="done"
+              onSubmitEditing={() => {
+                handleSubmit(onSubmit)();
+              }}
               value={value}
               onBlur={onBlur}
               onChangeText={onChange}
@@ -240,14 +275,19 @@ export default function LoginScreen() {
           style={[
             styles.socialButton,
             { backgroundColor: colors.surface, borderColor: colors.border },
+            (!hasGoogleConfig || !!socialLoading) && styles.socialDisabled,
           ]}
           onPress={handleGoogleLogin}
           disabled={!hasGoogleConfig || !!socialLoading}
           activeOpacity={0.8}
         >
-          <Ionicons name="logo-google" size={20} color="#DB4437" />
+          {socialLoading === 'GOOGLE' ? (
+            <ActivityIndicator size="small" color="#DB4437" />
+          ) : (
+            <Ionicons name="logo-google" size={20} color="#DB4437" />
+          )}
           <Text style={[styles.socialButtonText, { color: colors.text }]}>
-            Continuar con Google
+            {socialLoading === 'GOOGLE' ? 'Redirigiendo a Google...' : 'Continuar con Google'}
           </Text>
         </TouchableOpacity>
 
@@ -256,14 +296,19 @@ export default function LoginScreen() {
           style={[
             styles.socialButton,
             { backgroundColor: colors.surface, borderColor: colors.border },
+            (!hasDiscordConfig || !!socialLoading) && styles.socialDisabled,
           ]}
           onPress={handleDiscordLogin}
           disabled={!hasDiscordConfig || !!socialLoading}
           activeOpacity={0.8}
         >
-          <Ionicons name="logo-discord" size={20} color="#5865F2" />
+          {socialLoading === 'DISCORD' ? (
+            <ActivityIndicator size="small" color="#5865F2" />
+          ) : (
+            <Ionicons name="logo-discord" size={20} color="#5865F2" />
+          )}
           <Text style={[styles.socialButtonText, { color: colors.text }]}>
-            Continuar con Discord
+            {socialLoading === 'DISCORD' ? 'Redirigiendo a Discord...' : 'Continuar con Discord'}
           </Text>
         </TouchableOpacity>
 
@@ -272,14 +317,19 @@ export default function LoginScreen() {
           style={[
             styles.socialButton,
             { backgroundColor: colors.surface, borderColor: colors.border },
+            (!hasGithubConfig || !!socialLoading) && styles.socialDisabled,
           ]}
           onPress={handleGithubLogin}
           disabled={!hasGithubConfig || !!socialLoading}
           activeOpacity={0.8}
         >
-          <Ionicons name="logo-github" size={20} color={isDark ? '#F8FAFC' : '#24292E'} />
+          {socialLoading === 'GITHUB' ? (
+            <ActivityIndicator size="small" color={isDark ? '#F8FAFC' : '#24292E'} />
+          ) : (
+            <Ionicons name="logo-github" size={20} color={isDark ? '#F8FAFC' : '#24292E'} />
+          )}
           <Text style={[styles.socialButtonText, { color: colors.text }]}>
-            Continuar con GitHub
+            {socialLoading === 'GITHUB' ? 'Redirigiendo a GitHub...' : 'Continuar con GitHub'}
           </Text>
         </TouchableOpacity>
       </View>
@@ -383,16 +433,11 @@ const styles = StyleSheet.create({
     shadowRadius: 2,
   },
   socialDisabled: {
-    backgroundColor: '#F5F5F5',
-    borderColor: '#E0E0E0',
-    opacity: 0.6,
+    opacity: 0.65,
   },
   socialButtonText: {
     fontSize: 14,
     fontWeight: '600',
     color: '#333',
-  },
-  socialDisabledText: {
-    color: '#999',
   },
 });

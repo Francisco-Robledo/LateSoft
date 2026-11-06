@@ -18,6 +18,12 @@ import { usePopup } from '../../src/context/PopupContext';
 import { apiClient } from '../../src/api/client';
 import { formatPrice } from '../../src/utils/format';
 import { useTheme } from '../../src/context/ThemeContext';
+import {
+  isValidEmail,
+  sanitizeDecimal,
+  sanitizeName,
+  validateFullName,
+} from '../../src/utils/validation';
 
 export default function ManagerScreen() {
   const router = useRouter();
@@ -143,10 +149,23 @@ export default function ManagerScreen() {
 
   // ABML PERSONAL: Alta
   const handleCreateStaff = async () => {
-    if (!staffFullName || !staffEmail || !staffPassword) {
+    const nameErr = validateFullName(staffFullName, true);
+    if (nameErr) {
+      showPopup({ title: 'Nombre inválido', message: nameErr, type: 'warning' });
+      return;
+    }
+    if (!isValidEmail(staffEmail)) {
       showPopup({
-        title: 'Campos requeridos',
-        message: 'Completá todos los campos.',
+        title: 'Correo inválido',
+        message: 'Ingresá un correo electrónico válido para el empleado.',
+        type: 'warning',
+      });
+      return;
+    }
+    if (!staffPassword || staffPassword.length < 8 || /\s/.test(staffPassword)) {
+      showPopup({
+        title: 'Contraseña inválida',
+        message: 'La contraseña debe tener al menos 8 caracteres y no contener espacios.',
         type: 'warning',
       });
       return;
@@ -154,8 +173,8 @@ export default function ManagerScreen() {
 
     try {
       await apiClient.post('/users', {
-        fullName: staffFullName,
-        email: staffEmail,
+        fullName: staffFullName.trim().replace(/\s+/g, ' '),
+        email: staffEmail.trim().toLowerCase(),
         password: staffPassword,
         role: staffRole,
         branchId,
@@ -449,10 +468,11 @@ export default function ManagerScreen() {
             <TextInput
               style={[styles.modalInput, { backgroundColor: colors.inputBg, borderColor: colors.border, color: colors.text }]}
               keyboardType="numeric"
+              maxLength={12}
               placeholder="Nuevo precio con IVA"
               placeholderTextColor={colors.placeholder}
               value={newPrice}
-              onChangeText={setNewPrice}
+              onChangeText={(txt) => setNewPrice(sanitizeDecimal(txt))}
             />
 
             <Button title="Guardar Precio" onPress={handleSavePrice} />
@@ -476,8 +496,9 @@ export default function ManagerScreen() {
               style={[styles.modalInput, { backgroundColor: colors.inputBg, borderColor: colors.border, color: colors.text }]}
               placeholder="Nombre y Apellido"
               placeholderTextColor={colors.placeholder}
+              maxLength={80}
               value={staffFullName}
-              onChangeText={setStaffFullName}
+              onChangeText={(txt) => setStaffFullName(sanitizeName(txt))}
             />
             <TextInput
               style={[styles.modalInput, { backgroundColor: colors.inputBg, borderColor: colors.border, color: colors.text }]}
@@ -485,8 +506,9 @@ export default function ManagerScreen() {
               placeholderTextColor={colors.placeholder}
               keyboardType="email-address"
               autoCapitalize="none"
+              maxLength={120}
               value={staffEmail}
-              onChangeText={setStaffEmail}
+              onChangeText={(txt) => setStaffEmail(txt.replace(/\s/g, ''))}
             />
             <TextInput
               style={[styles.modalInput, { backgroundColor: colors.inputBg, borderColor: colors.border, color: colors.text }]}

@@ -18,6 +18,13 @@ import { usePopup } from '../../src/context/PopupContext';
 import { useAuth } from '../../src/context/AuthContext';
 import { useTheme } from '../../src/context/ThemeContext';
 import { apiClient } from '../../src/api/client';
+import {
+  isValidEmail,
+  sanitizeName,
+  sanitizePhone,
+  validateFullName,
+  validatePhone,
+} from '../../src/utils/validation';
 
 const ROLES = [
   { value: '', label: 'Todos' },
@@ -132,10 +139,36 @@ export default function AdminManagersScreen() {
 
   // 1. CREATE
   const handleCreate = async () => {
-    if (!fullName.trim() || !email.trim() || password.length < 8 || (needsBranch && !selectedBranchId)) {
+    const nameErr = validateFullName(fullName, true);
+    if (nameErr) {
+      showPopup({ title: 'Nombre inválido', message: nameErr, type: 'warning' });
+      return;
+    }
+    if (!isValidEmail(email)) {
       showPopup({
-        title: 'Revisá los datos',
-        message: 'Completá nombre, correo, contraseña (mínimo 8 caracteres) y sucursal para el personal.',
+        title: 'Correo inválido',
+        message: 'Ingresá un correo electrónico con formato válido.',
+        type: 'warning',
+      });
+      return;
+    }
+    if (password.length < 8 || /\s/.test(password)) {
+      showPopup({
+        title: 'Contraseña inválida',
+        message: 'La contraseña debe tener al menos 8 caracteres y sin espacios.',
+        type: 'warning',
+      });
+      return;
+    }
+    const phoneErr = validatePhone(phone, false);
+    if (phoneErr) {
+      showPopup({ title: 'Teléfono inválido', message: phoneErr, type: 'warning' });
+      return;
+    }
+    if (needsBranch && !selectedBranchId) {
+      showPopup({
+        title: 'Sucursal requerida',
+        message: 'Seleccioná una sucursal para asignar al personal.',
         type: 'warning',
       });
       return;
@@ -143,7 +176,7 @@ export default function AdminManagersScreen() {
     setSaving(true);
     try {
       await apiClient.post('/users', {
-        fullName: fullName.trim(),
+        fullName: fullName.trim().replace(/\s+/g, ' '),
         email: email.trim().toLowerCase(),
         password,
         role: newRole,
@@ -185,10 +218,20 @@ export default function AdminManagersScreen() {
 
   const handleUpdate = async () => {
     if (!editingUser) return;
-    if (!editFullName.trim()) {
+    const nameErr = validateFullName(editFullName, true);
+    if (nameErr) {
       showPopup({
-        title: 'Nombre requerido',
-        message: 'El nombre completo no puede estar vacío.',
+        title: 'Nombre inválido',
+        message: nameErr,
+        type: 'warning',
+      });
+      return;
+    }
+    const phoneErr = validatePhone(editPhone, false);
+    if (phoneErr) {
+      showPopup({
+        title: 'Teléfono inválido',
+        message: phoneErr,
         type: 'warning',
       });
       return;
@@ -481,10 +524,11 @@ export default function AdminManagersScreen() {
 
               <TextInput
                 style={[styles.modalInput, { backgroundColor: colors.inputBg, borderColor: colors.border, color: colors.text }]}
-                placeholder="Nombre completo"
+                placeholder="Nombre y apellido"
                 placeholderTextColor={colors.placeholder}
+                maxLength={80}
                 value={fullName}
-                onChangeText={setFullName}
+                onChangeText={(txt) => setFullName(sanitizeName(txt))}
               />
               <TextInput
                 style={[styles.modalInput, { backgroundColor: colors.inputBg, borderColor: colors.border, color: colors.text }]}
@@ -492,14 +536,16 @@ export default function AdminManagersScreen() {
                 placeholderTextColor={colors.placeholder}
                 autoCapitalize="none"
                 keyboardType="email-address"
+                maxLength={120}
                 value={email}
-                onChangeText={setEmail}
+                onChangeText={(txt) => setEmail(txt.replace(/\s/g, ''))}
               />
               <TextInput
                 style={[styles.modalInput, { backgroundColor: colors.inputBg, borderColor: colors.border, color: colors.text }]}
                 placeholder="Contraseña (mínimo 8 caracteres)"
                 placeholderTextColor={colors.placeholder}
                 secureTextEntry
+                maxLength={64}
                 value={password}
                 onChangeText={setPassword}
               />
@@ -508,8 +554,9 @@ export default function AdminManagersScreen() {
                 placeholder="Teléfono (opcional)"
                 placeholderTextColor={colors.placeholder}
                 keyboardType="phone-pad"
+                maxLength={22}
                 value={phone}
-                onChangeText={setPhone}
+                onChangeText={(txt) => setPhone(sanitizePhone(txt))}
               />
 
               <Text style={[styles.sectionLabel, { color: colors.text }]}>Rol asignado</Text>
@@ -590,10 +637,11 @@ export default function AdminManagersScreen() {
               <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Nombre Completo:</Text>
               <TextInput
                 style={[styles.modalInput, { backgroundColor: colors.inputBg, borderColor: colors.border, color: colors.text }]}
-                placeholder="Nombre completo"
+                placeholder="Nombre y apellido"
                 placeholderTextColor={colors.placeholder}
+                maxLength={80}
                 value={editFullName}
-                onChangeText={setEditFullName}
+                onChangeText={(txt) => setEditFullName(sanitizeName(txt))}
               />
 
               <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Teléfono:</Text>
@@ -602,8 +650,9 @@ export default function AdminManagersScreen() {
                 placeholder="Teléfono"
                 placeholderTextColor={colors.placeholder}
                 keyboardType="phone-pad"
+                maxLength={22}
                 value={editPhone}
-                onChangeText={setEditPhone}
+                onChangeText={(txt) => setEditPhone(sanitizePhone(txt))}
               />
 
               <Text style={[styles.sectionLabel, { color: colors.text }]}>Rol:</Text>

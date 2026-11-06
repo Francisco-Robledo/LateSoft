@@ -10,6 +10,7 @@ import { useRouter } from 'expo-router';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { Ionicons } from '@expo/vector-icons';
 import { Screen } from '../../src/components/Screen';
 import { Input } from '../../src/components/Input';
 import { Button } from '../../src/components/Button';
@@ -17,32 +18,30 @@ import { Card } from '../../src/components/Card';
 import { ErrorBanner } from '../../src/components/ErrorBanner';
 import { useAuth } from '../../src/context/AuthContext';
 import { useTheme } from '../../src/context/ThemeContext';
-
-const registerFormSchema = z.object({
-  fullName: z.string().min(2, 'Ingresá tu nombre y apellido completo'),
-  email: z.string().min(1, 'Ingresá tu correo').email('El correo no es válido'),
-  phone: z.string().optional(),
-  password: z.string().min(8, 'La contraseña debe tener al menos 8 caracteres'),
-  confirmPassword: z.string().min(8, 'Confirmá tu contraseña'),
-}).refine((data) => data.password === data.confirmPassword, {
-  message: 'Las contraseñas no coinciden',
-  path: ['confirmPassword'],
-});
+import {
+  registerFormSchema,
+  sanitizeName,
+  sanitizePhone,
+  getPasswordChecks,
+} from '../../src/utils/validation';
 
 type RegisterFormData = z.infer<typeof registerFormSchema>;
 
 export default function RegisterScreen() {
   const router = useRouter();
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const { register: registerCustomer, error, isOffline } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const {
     control,
     handleSubmit,
+    watch,
     formState: { errors },
   } = useForm<RegisterFormData>({
     resolver: zodResolver(registerFormSchema),
+    mode: 'onTouched',
+    reValidateMode: 'onChange',
     defaultValues: {
       fullName: '',
       email: '',
@@ -52,14 +51,17 @@ export default function RegisterScreen() {
     },
   });
 
+  const watchedPassword = watch('password') || '';
+  const pwdChecks = getPasswordChecks(watchedPassword);
+
   const onSubmit = async (data: RegisterFormData) => {
     setIsSubmitting(true);
     try {
       await registerCustomer({
-        fullName: data.fullName,
-        email: data.email,
+        fullName: data.fullName.trim().replace(/\s+/g, ' '),
+        email: data.email.trim().toLowerCase(),
         password: data.password,
-        phone: data.phone || undefined,
+        phone: data.phone?.trim() || undefined,
       });
       router.replace('/');
     } catch {
@@ -78,7 +80,9 @@ export default function RegisterScreen() {
           resizeMode="contain"
         />
         <Text style={[styles.title, { color: colors.text }]}>Creá tu cuenta</Text>
-        <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Sumate a LateSoft para pedir y retirar al instante</Text>
+        <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+          Sumate a LateSoft para pedir y retirar al instante
+        </Text>
       </View>
 
       {isOffline && (
@@ -98,11 +102,13 @@ export default function RegisterScreen() {
           name="fullName"
           render={({ field: { onChange, onBlur, value } }) => (
             <Input
-              label="Nombre y Apellido"
+              label="Nombre y Apellido *"
               placeholder="Ej. Lucas Rossi"
+              autoCapitalize="words"
+              maxLength={80}
               value={value}
               onBlur={onBlur}
-              onChangeText={onChange}
+              onChangeText={(txt) => onChange(sanitizeName(txt))}
               error={errors.fullName?.message}
             />
           )}
@@ -113,13 +119,14 @@ export default function RegisterScreen() {
           name="email"
           render={({ field: { onChange, onBlur, value } }) => (
             <Input
-              label="Correo electrónico"
+              label="Correo electrónico *"
               placeholder="tu@email.com"
               keyboardType="email-address"
               autoComplete="email"
+              maxLength={120}
               value={value}
               onBlur={onBlur}
-              onChangeText={onChange}
+              onChangeText={(txt) => onChange(txt.replace(/\s/g, ''))}
               error={errors.email?.message}
             />
           )}
@@ -133,9 +140,10 @@ export default function RegisterScreen() {
               label="Teléfono / Celular (opcional)"
               placeholder="+54 11 1234-5678"
               keyboardType="phone-pad"
-              value={value}
+              maxLength={22}
+              value={value || ''}
               onBlur={onBlur}
-              onChangeText={onChange}
+              onChangeText={(txt) => onChange(sanitizePhone(txt))}
               error={errors.phone?.message}
             />
           )}
@@ -145,15 +153,52 @@ export default function RegisterScreen() {
           control={control}
           name="password"
           render={({ field: { onChange, onBlur, value } }) => (
-            <Input
-              label="Contraseña"
-              placeholder="Mínimo 8 caracteres"
-              isPassword
-              value={value}
-              onBlur={onBlur}
-              onChangeText={onChange}
-              error={errors.password?.message}
-            />
+            <View>
+              <Input
+                label="Contraseña *"
+                placeholder="Mínimo 8 caracteres"
+                isPassword
+                maxLength={64}
+                value={value}
+                onBlur={onBlur}
+                onChangeText={onChange}
+                error={errors.password?.message}
+              />
+              {watchedPassword.length > 0 && (
+                <View style={[styles.pwdChecklist, { backgroundColor: colors.surfaceSecondary, borderColor: colors.border }]}>
+                  <View style={styles.pwdCheckItem}>
+                    <Ionicons
+                      name={pwdChecks.minLength ? 'checkmark-circle' : 'ellipse-outline'}
+                      size={14}
+                      color={pwdChecks.minLength ? '#16A34A' : colors.textSecondary}
+                    />
+                    <Text style={[styles.pwdCheckText, { color: pwdChecks.minLength ? '#16A34A' : colors.textSecondary }]}>
+                      Al menos 8 caracteres
+                    </Text>
+                  </View>
+                  <View style={styles.pwdCheckItem}>
+                    <Ionicons
+                      name={pwdChecks.hasUpperAndLower ? 'checkmark-circle' : 'ellipse-outline'}
+                      size={14}
+                      color={pwdChecks.hasUpperAndLower ? '#16A34A' : colors.textSecondary}
+                    />
+                    <Text style={[styles.pwdCheckText, { color: pwdChecks.hasUpperAndLower ? '#16A34A' : colors.textSecondary }]}>
+                      Una letra mayúscula y una minúscula
+                    </Text>
+                  </View>
+                  <View style={styles.pwdCheckItem}>
+                    <Ionicons
+                      name={pwdChecks.hasNumber ? 'checkmark-circle' : 'ellipse-outline'}
+                      size={14}
+                      color={pwdChecks.hasNumber ? '#16A34A' : colors.textSecondary}
+                    />
+                    <Text style={[styles.pwdCheckText, { color: pwdChecks.hasNumber ? '#16A34A' : colors.textSecondary }]}>
+                      Al menos un número
+                    </Text>
+                  </View>
+                </View>
+              )}
+            </View>
           )}
         />
 
@@ -162,9 +207,14 @@ export default function RegisterScreen() {
           name="confirmPassword"
           render={({ field: { onChange, onBlur, value } }) => (
             <Input
-              label="Repetir Contraseña"
+              label="Repetir Contraseña *"
               placeholder="Repetí la contraseña"
               isPassword
+              maxLength={64}
+              returnKeyType="done"
+              onSubmitEditing={() => {
+                handleSubmit(onSubmit)();
+              }}
               value={value}
               onBlur={onBlur}
               onChangeText={onChange}
@@ -226,6 +276,24 @@ const styles = StyleSheet.create({
   },
   card: {
     padding: 22,
+  },
+  pwdChecklist: {
+    marginTop: -8,
+    marginBottom: 14,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 4,
+  },
+  pwdCheckItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  pwdCheckText: {
+    fontSize: 12,
+    fontWeight: '500',
   },
   submitBtn: {
     marginTop: 8,

@@ -2,8 +2,8 @@ import { z } from 'zod';
 
 export const registerSchema = z.object({
   body: z.object({
-    fullName: z.string().min(2, 'El nombre debe tener al menos 2 caracteres').max(100),
-    email: z.string().email('El correo electrónico no es válido'),
+    fullName: z.string().trim().min(2, 'El nombre debe tener al menos 2 caracteres').max(100),
+    email: z.string().trim().email('El correo electrónico no es válido'),
     password: z.string().min(8, 'La contraseña debe tener al menos 8 caracteres'),
     phone: z.string().max(30).optional(),
     // Invariable: Si envian role, se ignora o se rechaza. Aqui lo ignoramos forzando CUSTOMER
@@ -13,7 +13,7 @@ export const registerSchema = z.object({
 
 export const loginSchema = z.object({
   body: z.object({
-    email: z.string().email('El correo electrónico no es válido'),
+    email: z.string().trim().email('El correo electrónico no es válido'),
     password: z.string().min(1, 'La contraseña es requerida'),
   }),
 });
@@ -28,7 +28,7 @@ export const socialLoginSchema = z.object({
     code: z.string().optional(),
     redirectUri: z.string().optional(),
   }).refine((data) => {
-    if (data.provider === 'GOOGLE') return !!data.idToken;
+    if (data.provider === 'GOOGLE') return !!(data.idToken || data.accessToken);
     if (data.provider === 'FACEBOOK') return !!data.accessToken;
     if (data.provider === 'GITHUB') return !!data.code;
     if (data.provider === 'DISCORD') return !!(data.code || data.accessToken);

@@ -21,6 +21,7 @@ import { usePopup } from '../../src/context/PopupContext';
 import { apiClient } from '../../src/api/client';
 import { formatPrice } from '../../src/utils/format';
 import { useTheme } from '../../src/context/ThemeContext';
+import { sanitizeDigitsOnly } from '../../src/utils/validation';
 
 export default function CartScreen() {
   const router = useRouter();
@@ -141,10 +142,11 @@ export default function CartScreen() {
 
     // Validación estricta para Mercado Pago
     if (paymentMethod === 'TRANSFER') {
-      if (!transferReference.trim() || transferReference.trim().length < 4) {
+      const refClean = transferReference.trim();
+      if (!/^\d{6,20}$/.test(refClean)) {
         showPopup({
-          title: 'Número de operación requerido',
-          message: 'Por favor ingresá el número de comprobante u operación de Mercado Pago (mínimo 4 caracteres).',
+          title: 'Número de operación inválido',
+          message: 'Ingresá un número de comprobante u operación numérico válido de Mercado Pago (entre 6 y 20 dígitos).',
           type: 'warning',
         });
         return;
@@ -462,10 +464,11 @@ export default function CartScreen() {
                     { backgroundColor: colors.inputBg, borderColor: colors.border, color: colors.text },
                     !transferReference.trim() && { borderColor: '#F59E0B' },
                   ]}
-                  placeholder="Ej: 89341258 (obligatorio)"
+                  placeholder="Ej: 89341258 (solo números, mín. 6 dígitos)"
                   placeholderTextColor={colors.placeholder}
+                  maxLength={20}
                   value={transferReference}
-                  onChangeText={setTransferReference}
+                  onChangeText={(txt) => setTransferReference(sanitizeDigitsOnly(txt))}
                   keyboardType="numeric"
                 />
 

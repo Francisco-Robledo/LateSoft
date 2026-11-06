@@ -15,11 +15,11 @@ export class SocialVerifier {
   private static googleClient = new OAuth2Client();
 
   /**
-   * Verifica ID Token de Google (Web o Android)
+   * Verifica ID Token o Access Token de Google (Web o Android)
    */
-  public static async verifyGoogle(idToken: string): Promise<VerifiedSocialProfile> {
-    // Soporte para modo simulación / demo en aplicaciones móviles
-    if (idToken === 'mock-google-id-token' || idToken.startsWith('mock-')) {
+  public static async verifyGoogle(idToken?: string, accessToken?: string): Promise<VerifiedSocialProfile> {
+    // Soporte para modo simulación únicamente fuera de producción
+    if (env.NODE_ENV !== 'production' && idToken && (idToken === 'mock-google-id-token' || idToken.startsWith('mock-'))) {
       return {
         provider: 'GOOGLE',
         providerUserId: 'google_mock_1029384756',
@@ -30,24 +30,45 @@ export class SocialVerifier {
     }
 
     try {
-      const audiences = env.GOOGLE_CLIENT_IDS.split(',').map((s) => s.trim()).filter(Boolean);
-      const ticket = await this.googleClient.verifyIdToken({
-        idToken,
-        audience: audiences.length > 0 ? audiences : undefined,
-      });
+      if (idToken) {
+        const audiences = env.GOOGLE_CLIENT_IDS.split(',').map((s) => s.trim()).filter(Boolean);
+        const ticket = await this.googleClient.verifyIdToken({
+          idToken,
+          audience: audiences.length > 0 ? audiences : undefined,
+        });
 
-      const payload = ticket.getPayload();
-      if (!payload || !payload.sub) {
-        throw new UnauthorizedError('Token de Google inválido');
+        const payload = ticket.getPayload();
+        if (!payload || !payload.sub) {
+          throw new UnauthorizedError('Token de Google inválido');
+        }
+
+        return {
+          provider: 'GOOGLE',
+          providerUserId: payload.sub,
+          email: payload.email || null,
+          fullName: payload.name || payload.email?.split('@')[0] || 'Usuario Google',
+          emailVerified: !!payload.email_verified,
+        };
       }
 
-      return {
-        provider: 'GOOGLE',
-        providerUserId: payload.sub,
-        email: payload.email || null,
-        fullName: payload.name || payload.email?.split('@')[0] || 'Usuario Google',
-        emailVerified: !!payload.email_verified,
-      };
+      if (accessToken) {
+        const userInfoRes = await axios.get('https://www.googleapis.com/oauth2/v3/userinfo', {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        const data = userInfoRes.data;
+        if (!data?.sub) {
+          throw new UnauthorizedError('No se pudo verificar la identidad con Google');
+        }
+        return {
+          provider: 'GOOGLE',
+          providerUserId: String(data.sub),
+          email: data.email || null,
+          fullName: data.name || data.email?.split('@')[0] || 'Usuario Google',
+          emailVerified: !!data.email_verified,
+        };
+      }
+
+      throw new UnauthorizedError('Credencial de Google requerida');
     } catch (err) {
       console.error('[Google Verification Error]', err);
       throw new UnauthorizedError('Error al verificar las credenciales con Google');
@@ -60,7 +81,7 @@ export class SocialVerifier {
   public static async verifyFacebook(accessToken: string): Promise<VerifiedSocialProfile> {
     try {
       const appToken = `${env.FACEBOOK_APP_ID}|${env.FACEBOOK_APP_SECRET}`;
-      
+
       // 1. Validar validez del token si las credenciales de app estan configuradas
       if (env.FACEBOOK_APP_ID && env.FACEBOOK_APP_SECRET) {
         const debugRes = await axios.get('https://graph.facebook.com/debug_token', {

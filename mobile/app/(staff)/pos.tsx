@@ -8,6 +8,7 @@ import {
   TextInput,
   Modal,
   Image,
+  useWindowDimensions,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,6 +22,7 @@ import { useTheme } from '../../src/context/ThemeContext';
 import { ManagerPinModal } from '../../src/components/ManagerPinModal';
 import { apiClient } from '../../src/api/client';
 import { formatPrice, formatDateTime } from '../../src/utils/format';
+import { sanitizeDecimal } from '../../src/utils/validation';
 
 interface PosProduct {
   branch_product_id: number;
@@ -63,6 +65,10 @@ interface PendingTransferOrder {
 
 export default function PosScreen() {
   const router = useRouter();
+  const { width } = useWindowDimensions();
+  const isCompactTabs = width < 600;
+  const isStackedPos = width < 680;
+
   const { user, logout } = useAuth();
   const { showPopup, showConfirm } = usePopup();
   const { colors, isDark } = useTheme();
@@ -191,10 +197,10 @@ export default function PosScreen() {
   const handleConfirmPosPayment = async () => {
     if (paymentMethod === 'CASH') {
       const tenderedNum = parseFloat(cashTendered.replace(',', '.'));
-      if (isNaN(tenderedNum) || tenderedNum < ticketTotal) {
+      if (!cashTendered.trim() || isNaN(tenderedNum) || tenderedNum < ticketTotal) {
         showPopup({
           title: 'Monto insuficiente',
-          message: 'El efectivo entregado debe ser igual o mayor al total a pagar.',
+          message: 'El efectivo entregado debe ser un número válido igual o mayor al total a pagar.',
           type: 'warning',
         });
         return;
@@ -246,6 +252,18 @@ export default function PosScreen() {
   // Cobro de pedido hecho desde la app (UNPAID -> PAID)
   const handlePayAppOrder = async () => {
     if (!selectedAppOrder) return;
+    if (paymentMethod === 'CASH') {
+      const tenderedNum = parseFloat(cashTendered.replace(',', '.'));
+      if (!cashTendered.trim() || isNaN(tenderedNum) || tenderedNum < selectedAppOrder.total_amount) {
+        showPopup({
+          title: 'Monto insuficiente',
+          message: 'El efectivo entregado debe ser igual o mayor al total del pedido.',
+          type: 'warning',
+        });
+        return;
+      }
+    }
+
     setIsProcessing(true);
     try {
       await apiClient.post(`/orders/${selectedAppOrder.id}/pay`, {
@@ -306,10 +324,10 @@ export default function PosScreen() {
 
   const handleConfirmRejectTransfer = async () => {
     if (!orderToReject) return;
-    if (!rejectionReason.trim()) {
+    if (!rejectionReason.trim() || rejectionReason.trim().length < 5) {
       showPopup({
         title: 'Motivo requerido',
-        message: 'Por favor seleccioná o escribí un motivo de rechazo.',
+        message: 'Por favor seleccioná o escribí un motivo de rechazo claro (mínimo 5 caracteres).',
         type: 'warning',
       });
       return;
@@ -362,55 +380,236 @@ export default function PosScreen() {
   };
 
   return (
-    <Screen style={styles.screen}>
-      {/* Selector de pestañas superiores */}
+    <Screen maxWidth={1120} style={styles.screen}>
+      {/* Cabecera superior separada para que los botones de acción nunca compriman las pestañas */}
+      <View style={[styles.topHeader, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+        <View style={styles.topHeaderInfo}>
+          <Text style={[styles.topHeaderTitle, { color: colors.text }]} numberOfLines={1}>
+            Caja y Cobros
+          </Text>
+          <Text style={[styles.topHeaderSub, { color: colors.textSecondary }]} numberOfLines={1}>
+            Sucursal #{branchId} • {user?.fullName || 'Cajero'}
+          </Text>
+        </View>
+
+        <View style={styles.topHeaderActions}>
+          <TouchableOpacity
+            style={[
+              styles.headerActionBtn,
+              { backgroundColor: isDark ? '#3D2A14' : '#FEF3C7', borderColor: isDark ? '#78350F' : '#FDE68A' },
+            ]}
+            onPress={() => router.push('/(staff)/shift' as any)}
+            accessibilityLabel="Ir a Turno y Caja"
+          >
+            <Ionicons name="wallet-outline" size={17} color={isDark ? '#FBBF24' : '#92400E'} />
+            {!isCompactTabs && (
+              <Text style={[styles.headerActionText, { color: isDark ? '#FBBF24' : '#92400E' }]}>
+                Turno / Caja
+              </Text>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.headerActionBtn,
+              {
+                backgroundColor: isDark ? 'rgba(220,38,38,0.15)' : '#FEE2E2',
+                borderColor: isDark ? 'rgba(220,38,38,0.35)' : '#FECACA',
+              },
+            ]}
+            onPress={handleLogout}
+            accessibilityLabel="Cerrar sesión"
+          >
+            <Ionicons name="log-out-outline" size={17} color="#DC2626" />
+            {!isCompactTabs && (
+              <Text style={[styles.headerActionText, { color: '#DC2626' }]}>Salir</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* Selector de 3 pestañas limpio, adaptativo y sin solapamientos de texto */}
       <View style={[styles.tabBar, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
         <TouchableOpacity
-          style={[styles.tabBtn, activeTab === 'POS' && styles.tabBtnActive]}
+          style={[
+            styles.tabBtn,
+            isCompactTabs && styles.tabBtnCompact,
+            activeTab === 'POS' && [styles.tabBtnActive, { borderBottomColor: colors.primary }],
+          ]}
           onPress={() => setActiveTab('POS')}
+          activeOpacity={0.75}
         >
-          <Ionicons name="calculator" size={18} color={activeTab === 'POS' ? colors.primary : colors.textSecondary} />
-          <Text style={[styles.tabBtnText, { color: activeTab === 'POS' ? colors.primary : colors.textSecondary }, activeTab === 'POS' && styles.tabBtnTextActive]}>
-            Mostrador (POS)
+          <View style={styles.tabIconWrap}>
+            <Ionicons
+              name="calculator"
+              size={18}
+              color={activeTab === 'POS' ? colors.primary : colors.textSecondary}
+            />
+          </View>
+          <Text
+            numberOfLines={1}
+            style={[
+              styles.tabBtnText,
+              isCompactTabs && styles.tabBtnTextCompact,
+              { color: activeTab === 'POS' ? colors.primary : colors.textSecondary },
+              activeTab === 'POS' && styles.tabBtnTextActive,
+            ]}
+          >
+            {isCompactTabs ? 'Mostrador POS' : 'Mostrador (POS)'}
           </Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.tabBtn, activeTab === 'PENDING_APP' && styles.tabBtnActive]}
+          style={[
+            styles.tabBtn,
+            isCompactTabs && styles.tabBtnCompact,
+            activeTab === 'PENDING_APP' && [styles.tabBtnActive, { borderBottomColor: colors.primary }],
+          ]}
           onPress={() => setActiveTab('PENDING_APP')}
+          activeOpacity={0.75}
         >
-          <Ionicons name="phone-portrait-outline" size={18} color={activeTab === 'PENDING_APP' ? colors.primary : colors.textSecondary} />
-          <Text style={[styles.tabBtnText, { color: activeTab === 'PENDING_APP' ? colors.primary : colors.textSecondary }, activeTab === 'PENDING_APP' && styles.tabBtnTextActive]}>
-            Por cobrar en App ({pendingAppOrders.length})
+          <View style={styles.tabIconWrap}>
+            <Ionicons
+              name="phone-portrait-outline"
+              size={18}
+              color={activeTab === 'PENDING_APP' ? colors.primary : colors.textSecondary}
+            />
+            {isCompactTabs && (
+              <View
+                style={[
+                  styles.tabCountPill,
+                  {
+                    backgroundColor:
+                      pendingAppOrders.length > 0
+                        ? colors.primary
+                        : colors.surfaceSecondary,
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.tabCountText,
+                    { color: pendingAppOrders.length > 0 ? '#FFFFFF' : colors.textSecondary },
+                  ]}
+                >
+                  {pendingAppOrders.length}
+                </Text>
+              </View>
+            )}
+          </View>
+          <Text
+            numberOfLines={1}
+            style={[
+              styles.tabBtnText,
+              isCompactTabs && styles.tabBtnTextCompact,
+              { color: activeTab === 'PENDING_APP' ? colors.primary : colors.textSecondary },
+              activeTab === 'PENDING_APP' && styles.tabBtnTextActive,
+            ]}
+          >
+            {isCompactTabs ? 'Cobros App' : 'Por cobrar en App'}
           </Text>
+          {!isCompactTabs && (
+            <View
+              style={[
+                styles.tabCountPill,
+                {
+                  backgroundColor:
+                    pendingAppOrders.length > 0 ? colors.primary : colors.surfaceSecondary,
+                },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.tabCountText,
+                  { color: pendingAppOrders.length > 0 ? '#FFFFFF' : colors.textSecondary },
+                ]}
+              >
+                {pendingAppOrders.length}
+              </Text>
+            </View>
+          )}
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.tabBtn, activeTab === 'TRANSFERS' && styles.tabBtnActive]}
+          style={[
+            styles.tabBtn,
+            isCompactTabs && styles.tabBtnCompact,
+            activeTab === 'TRANSFERS' && [styles.tabBtnActive, { borderBottomColor: '#009EE3' }],
+          ]}
           onPress={() => setActiveTab('TRANSFERS')}
+          activeOpacity={0.75}
         >
-          <Ionicons name="qr-code-outline" size={18} color={activeTab === 'TRANSFERS' ? '#009EE3' : colors.textSecondary} />
-          <Text style={[styles.tabBtnText, { color: activeTab === 'TRANSFERS' ? '#009EE3' : colors.textSecondary }, activeTab === 'TRANSFERS' && styles.tabBtnTextActive]}>
-            Transferencias ({pendingTransfers.length})
+          <View style={styles.tabIconWrap}>
+            <Ionicons
+              name="qr-code-outline"
+              size={18}
+              color={activeTab === 'TRANSFERS' ? '#009EE3' : colors.textSecondary}
+            />
+            {isCompactTabs && (
+              <View
+                style={[
+                  styles.tabCountPill,
+                  {
+                    backgroundColor:
+                      pendingTransfers.length > 0 ? '#009EE3' : colors.surfaceSecondary,
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.tabCountText,
+                    { color: pendingTransfers.length > 0 ? '#FFFFFF' : colors.textSecondary },
+                  ]}
+                >
+                  {pendingTransfers.length}
+                </Text>
+              </View>
+            )}
+          </View>
+          <Text
+            numberOfLines={1}
+            style={[
+              styles.tabBtnText,
+              isCompactTabs && styles.tabBtnTextCompact,
+              { color: activeTab === 'TRANSFERS' ? '#009EE3' : colors.textSecondary },
+              activeTab === 'TRANSFERS' && styles.tabBtnTextActive,
+            ]}
+          >
+            Transferencias
           </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.tabLogoutBtn, { backgroundColor: isDark ? '#3D2A14' : '#FEF3C7', marginRight: 6 }]}
-          onPress={() => router.push('/(staff)/shift' as any)}
-        >
-          <Ionicons name="wallet-outline" size={18} color={isDark ? '#F59E0B' : '#92400E'} />
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.tabLogoutBtn} onPress={handleLogout}>
-          <Ionicons name="log-out-outline" size={18} color="#D32F2F" />
+          {!isCompactTabs && (
+            <View
+              style={[
+                styles.tabCountPill,
+                {
+                  backgroundColor:
+                    pendingTransfers.length > 0 ? '#009EE3' : colors.surfaceSecondary,
+                },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.tabCountText,
+                  { color: pendingTransfers.length > 0 ? '#FFFFFF' : colors.textSecondary },
+                ]}
+              >
+                {pendingTransfers.length}
+              </Text>
+            </View>
+          )}
         </TouchableOpacity>
       </View>
 
       {activeTab === 'POS' ? (
-        <View style={styles.posLayout}>
-          {/* Columna izquierda: Catálogo */}
-          <View style={[styles.catalogCol, { borderRightColor: colors.border }]}>
+        <View style={[styles.posLayout, isStackedPos && styles.posLayoutStacked]}>
+          {/* Catálogo de productos */}
+          <View
+            style={[
+              styles.catalogCol,
+              { borderRightColor: colors.border, borderBottomColor: colors.border },
+              isStackedPos && styles.catalogColStacked,
+            ]}
+          >
             <View style={[styles.searchRow, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
               <Ionicons name="search" size={16} color={colors.textMuted} />
               <TextInput
@@ -427,7 +626,7 @@ export default function PosScreen() {
               keyExtractor={(item) => String(item.branch_product_id)}
               numColumns={2}
               columnWrapperStyle={{ gap: 8 }}
-              contentContainerStyle={{ paddingBottom: 20 }}
+              contentContainerStyle={{ paddingBottom: 16 }}
               renderItem={({ item }) => (
                 <TouchableOpacity
                   style={[
@@ -450,9 +649,17 @@ export default function PosScreen() {
             />
           </View>
 
-          {/* Columna derecha: Comanda activa de mostrador */}
-          <View style={[styles.ticketCol, { backgroundColor: colors.surface }]}>
-            <Text style={[styles.ticketTitle, { color: colors.text, borderBottomColor: colors.border }]}>Comanda Actual</Text>
+          {/* Comanda activa de mostrador */}
+          <View
+            style={[
+              styles.ticketCol,
+              { backgroundColor: colors.surface },
+              isStackedPos && styles.ticketColStacked,
+            ]}
+          >
+            <Text style={[styles.ticketTitle, { color: colors.text, borderBottomColor: colors.border }]}>
+              Comanda Actual {ticketItems.length > 0 ? `(${ticketItems.reduce((acc, i) => acc + i.quantity, 0)} ítems)` : ''}
+            </Text>
 
             <FlatList
               data={ticketItems}
@@ -463,8 +670,8 @@ export default function PosScreen() {
               }
               renderItem={({ item }) => (
                 <View style={[styles.ticketRow, { borderBottomColor: colors.borderLight }]}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.ticketRowName, { color: colors.text }]}>{item.name}</Text>
+                  <View style={{ flex: 1, paddingRight: 8 }}>
+                    <Text style={[styles.ticketRowName, { color: colors.text }]} numberOfLines={1}>{item.name}</Text>
                     <Text style={[styles.ticketRowPrice, { color: colors.primary }]}>{formatPrice(item.price * item.quantity)}</Text>
                   </View>
                   <View style={styles.ticketRowQty}>
@@ -572,8 +779,8 @@ export default function PosScreen() {
           renderItem={({ item }) => (
             <Card style={styles.transferCard}>
               <View style={[styles.transferCardHeader, { borderBottomColor: colors.border }]}>
-                <View>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <View style={{ flex: 1, paddingRight: 8 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
                     <Text style={[styles.appOrderNumber, { color: colors.primary }]}>Comanda #{item.order_number}</Text>
                     <View style={styles.mpBadge}>
                       <Text style={styles.mpBadgeText}>MERCADO PAGO</Text>
@@ -631,11 +838,11 @@ export default function PosScreen() {
               </View>
 
               {/* Botones de acción del cajero */}
-              <View style={{ flexDirection: 'row', gap: 10, marginTop: 14 }}>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 14 }}>
                 <Button
-                  title="Aprobar Pago (Enviar a Cocina)"
+                  title="Aprobar Pago"
                   size="small"
-                  style={{ flex: 1, backgroundColor: '#16A34A' }}
+                  style={{ flex: 1, minWidth: 150, backgroundColor: '#16A34A' }}
                   icon={<Ionicons name="checkmark-circle" size={16} color="#FFFFFF" />}
                   onPress={() => handleApproveTransfer(item)}
                 />
@@ -757,10 +964,11 @@ export default function PosScreen() {
                   <TextInput
                     style={[styles.cashInput, { color: colors.text }]}
                     keyboardType="numeric"
+                    maxLength={12}
                     placeholder="0.00"
                     placeholderTextColor={colors.placeholder}
                     value={cashTendered}
-                    onChangeText={setCashTendered}
+                    onChangeText={(txt) => setCashTendered(sanitizeDecimal(txt))}
                   />
                   {!!cashTendered && (
                     <TouchableOpacity
@@ -887,6 +1095,7 @@ export default function PosScreen() {
               style={[styles.customReasonInput, { backgroundColor: colors.inputBg, borderColor: colors.border, color: colors.text }]}
               placeholder="Otro motivo..."
               placeholderTextColor={colors.placeholder}
+              maxLength={200}
               value={rejectionReason}
               onChangeText={setRejectionReason}
             />
@@ -916,57 +1125,127 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
   },
+  topHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    gap: 8,
+  },
+  topHeaderInfo: {
+    flex: 1,
+    minWidth: 0,
+  },
+  topHeaderTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+  },
+  topHeaderSub: {
+    fontSize: 11,
+    marginTop: 1,
+  },
+  topHeaderActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  headerActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 8,
+    borderWidth: 1,
+    minHeight: 36,
+    minWidth: 38,
+  },
+  headerActionText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
   tabBar: {
     flexDirection: 'row',
-    backgroundColor: '#FFF',
     borderBottomWidth: 1,
-    borderBottomColor: '#EFEBE9',
-    alignItems: 'center',
-  },
-  tabLogoutBtn: {
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-    justifyContent: 'center',
-    alignItems: 'center',
+    alignItems: 'stretch',
   },
   tabBtn: {
     flex: 1,
+    minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
     gap: 6,
     borderBottomWidth: 3,
     borderBottomColor: 'transparent',
   },
+  tabBtnCompact: {
+    flexDirection: 'column',
+    paddingVertical: 9,
+    paddingHorizontal: 4,
+    gap: 4,
+  },
   tabBtnActive: {
     borderBottomColor: '#6F4E37',
+  },
+  tabIconWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
   },
   tabBtnText: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#777',
+    flexShrink: 1,
+    textAlign: 'center',
+  },
+  tabBtnTextCompact: {
+    fontSize: 11.5,
+    lineHeight: 15,
   },
   tabBtnTextActive: {
-    color: '#6F4E37',
+    fontWeight: '800',
+  },
+  tabCountPill: {
+    minWidth: 20,
+    height: 19,
+    paddingHorizontal: 5,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tabCountText: {
+    fontSize: 11,
+    fontWeight: '800',
   },
   posLayout: {
     flex: 1,
     flexDirection: 'row',
   },
+  posLayoutStacked: {
+    flexDirection: 'column',
+  },
   catalogCol: {
-    flex: 1.3,
+    flex: 1.35,
     padding: 10,
     borderRightWidth: 1,
-    borderRightColor: '#EFEBE9',
+  },
+  catalogColStacked: {
+    flex: 1.2,
+    borderRightWidth: 0,
+    borderBottomWidth: 1,
   },
   searchRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFF',
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#EFEBE9',
     paddingHorizontal: 10,
     marginBottom: 10,
     gap: 6,
@@ -978,14 +1257,12 @@ const styles = StyleSheet.create({
   },
   productGridItem: {
     flex: 1,
-    backgroundColor: '#FFF',
     borderRadius: 10,
     padding: 10,
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: '#EFEBE9',
     justifyContent: 'space-between',
-    minHeight: 85,
+    minHeight: 82,
     elevation: 1,
   },
   productGridPaused: {
@@ -995,12 +1272,10 @@ const styles = StyleSheet.create({
   productGridName: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#2A1810',
   },
   productGridPrice: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#6F4E37',
     marginTop: 4,
   },
   pausedLabel: {
@@ -1010,17 +1285,17 @@ const styles = StyleSheet.create({
   },
   ticketCol: {
     flex: 1,
-    backgroundColor: '#FFF',
     padding: 12,
     justifyContent: 'space-between',
   },
+  ticketColStacked: {
+    flex: 0.85,
+  },
   ticketTitle: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '800',
-    color: '#2A1810',
     marginBottom: 8,
     borderBottomWidth: 1,
-    borderBottomColor: '#F0ECE9',
     paddingBottom: 6,
   },
   ticketList: {
@@ -1028,9 +1303,8 @@ const styles = StyleSheet.create({
   },
   emptyTicketText: {
     fontSize: 12,
-    color: '#999',
     textAlign: 'center',
-    marginTop: 30,
+    marginTop: 20,
   },
   ticketRow: {
     flexDirection: 'row',
@@ -1038,26 +1312,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 8,
     borderBottomWidth: 1,
-    borderBottomColor: '#F8F5F2',
   },
   ticketRowName: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#333',
   },
   ticketRowPrice: {
     fontSize: 12,
-    color: '#6F4E37',
     fontWeight: '700',
   },
   ticketRowQty: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F5F5F5',
     borderRadius: 6,
   },
   ticketQtyBtn: {
     padding: 6,
+    borderRadius: 6,
   },
   ticketQtyNum: {
     fontSize: 12,
@@ -1066,7 +1337,6 @@ const styles = StyleSheet.create({
   },
   ticketFooter: {
     borderTopWidth: 1,
-    borderTopColor: '#EFEBE9',
     paddingTop: 10,
   },
   ticketTotalRow: {
@@ -1077,12 +1347,10 @@ const styles = StyleSheet.create({
   ticketTotalLabel: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#333',
   },
   ticketTotalAmount: {
     fontSize: 17,
     fontWeight: '800',
-    color: '#6F4E37',
   },
   appOrderCard: {
     padding: 14,
@@ -1092,23 +1360,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     borderBottomWidth: 1,
-    borderBottomColor: '#F0ECE9',
     paddingBottom: 8,
     marginBottom: 8,
   },
   appOrderNumber: {
     fontSize: 16,
     fontWeight: '800',
-    color: '#6F4E37',
   },
   appOrderCustomer: {
     fontSize: 12,
-    color: '#666',
   },
   appOrderTotal: {
     fontSize: 16,
     fontWeight: '800',
-    color: '#2A1810',
   },
   appOrderItems: {
     marginBottom: 10,
@@ -1116,7 +1380,6 @@ const styles = StyleSheet.create({
   },
   appOrderItemText: {
     fontSize: 12,
-    color: '#444',
   },
   modalOverlay: {
     flex: 1,
@@ -1125,9 +1388,11 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   modalContent: {
-    backgroundColor: '#FFF',
     borderRadius: 16,
     padding: 20,
+    maxWidth: 480,
+    width: '100%',
+    alignSelf: 'center',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -1137,18 +1402,15 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 18,
     fontWeight: '800',
-    color: '#2A1810',
   },
   modalTotal: {
     fontSize: 18,
     fontWeight: '800',
-    color: '#6F4E37',
     marginVertical: 12,
   },
   methodTitle: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#555',
     marginBottom: 8,
   },
   methodGrid: {
@@ -1160,33 +1422,20 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 12,
     borderRadius: 8,
-    backgroundColor: '#F5F5F5',
     borderWidth: 1.5,
-    borderColor: '#E0E0E0',
-  },
-  methodBtnActive: {
-    borderColor: '#6F4E37',
-    backgroundColor: '#F7F2EE',
   },
   methodText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#444',
-  },
-  methodTextActive: {
-    color: '#6F4E37',
-    fontWeight: '700',
   },
   cashSection: {
     marginTop: 14,
-    backgroundColor: '#FAF8F5',
     padding: 12,
     borderRadius: 8,
   },
   cashLabel: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#555',
     marginBottom: 6,
   },
   cashPresetsRow: {
@@ -1199,35 +1448,22 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
     paddingHorizontal: 12,
     borderRadius: 8,
-    backgroundColor: '#FFFFFF',
     borderWidth: 1.5,
-    borderColor: '#E7E5E4',
-  },
-  presetBtnActive: {
-    backgroundColor: '#6F4E37',
-    borderColor: '#6F4E37',
   },
   presetBtnText: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#6F4E37',
-  },
-  presetBtnTextActive: {
-    color: '#FFFFFF',
   },
   cashInputRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFF',
     borderWidth: 1.5,
-    borderColor: '#EFEBE9',
     borderRadius: 8,
     paddingHorizontal: 10,
   },
   currencyPrefix: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#666',
     marginRight: 4,
   },
   cashInput: {

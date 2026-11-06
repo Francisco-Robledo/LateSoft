@@ -16,6 +16,12 @@ import { usePopup } from '../../src/context/PopupContext';
 import { useTheme } from '../../src/context/ThemeContext';
 import { apiClient } from '../../src/api/client';
 import { formatPrice } from '../../src/utils/format';
+import {
+  sanitizeName,
+  sanitizePhone,
+  validateFullName,
+  validatePhone,
+} from '../../src/utils/validation';
 
 export default function CustomerProfileScreen() {
   const router = useRouter();
@@ -26,6 +32,8 @@ export default function CustomerProfileScreen() {
   const [isEditing, setIsEditing] = useState(false);
   const [fullName, setFullName] = useState(user?.fullName || '');
   const [phone, setPhone] = useState(user?.phone || '');
+  const [nameError, setNameError] = useState<string | null>(null);
+  const [phoneError, setPhoneError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [loyalty, setLoyalty] = useState<{ pointsBalance: number; lifetimePoints: number } | null>(null);
 
@@ -35,10 +43,38 @@ export default function CustomerProfileScreen() {
       .catch((err) => console.log('[Loyalty] Error cargando puntos:', err));
   }, []);
 
+  const handleToggleEdit = () => {
+    if (isEditing) {
+      setFullName(user?.fullName || '');
+      setPhone(user?.phone || '');
+      setNameError(null);
+      setPhoneError(null);
+      setIsEditing(false);
+    } else {
+      setFullName(user?.fullName || '');
+      setPhone(user?.phone || '');
+      setNameError(null);
+      setPhoneError(null);
+      setIsEditing(true);
+    }
+  };
+
   const handleSave = async () => {
+    const nErr = validateFullName(fullName, true);
+    const pErr = validatePhone(phone, false);
+    setNameError(nErr);
+    setPhoneError(pErr);
+
+    if (nErr || pErr) {
+      return;
+    }
+
     setIsSaving(true);
     try {
-      await updateProfile({ fullName, phone });
+      await updateProfile({
+        fullName: fullName.trim().replace(/\s+/g, ' '),
+        phone: phone.trim(),
+      });
       setIsEditing(false);
       showPopup({
         title: 'Éxito',
@@ -114,7 +150,7 @@ export default function CustomerProfileScreen() {
       <Card style={styles.card}>
         <View style={styles.cardHeader}>
           <Text style={[styles.cardTitle, { color: colors.text }]}>Datos personales</Text>
-          <TouchableOpacity onPress={() => setIsEditing(!isEditing)}>
+          <TouchableOpacity onPress={handleToggleEdit}>
             <Text style={[styles.editBtnText, { color: colors.primary }]}>{isEditing ? 'Cancelar' : 'Editar'}</Text>
           </TouchableOpacity>
         </View>
@@ -122,15 +158,31 @@ export default function CustomerProfileScreen() {
         {isEditing ? (
           <View style={styles.editForm}>
             <Input
-              label="Nombre y Apellido"
+              label="Nombre y Apellido *"
+              autoCapitalize="words"
+              maxLength={80}
               value={fullName}
-              onChangeText={setFullName}
+              onChangeText={(txt) => {
+                const cleaned = sanitizeName(txt);
+                setFullName(cleaned);
+                if (nameError) setNameError(validateFullName(cleaned, true));
+              }}
+              onBlur={() => setNameError(validateFullName(fullName, true))}
+              error={nameError || undefined}
             />
             <Input
-              label="Teléfono / Celular"
+              label="Teléfono / Celular (opcional)"
+              placeholder="+54 11 1234-5678"
               value={phone}
-              onChangeText={setPhone}
+              maxLength={22}
+              onChangeText={(txt) => {
+                const cleaned = sanitizePhone(txt);
+                setPhone(cleaned);
+                if (phoneError) setPhoneError(validatePhone(cleaned, false));
+              }}
+              onBlur={() => setPhoneError(validatePhone(phone, false))}
               keyboardType="phone-pad"
+              error={phoneError || undefined}
             />
             <Button
               title="Guardar cambios"

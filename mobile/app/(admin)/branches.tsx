@@ -15,6 +15,7 @@ import { Button } from '../../src/components/Button';
 import { usePopup } from '../../src/context/PopupContext';
 import { useTheme } from '../../src/context/ThemeContext';
 import { apiClient } from '../../src/api/client';
+import { sanitizeDecimal, sanitizePhone, validatePhone } from '../../src/utils/validation';
 
 export default function AdminBranchesScreen() {
   const { colors, isDark } = useTheme();
@@ -55,10 +56,24 @@ export default function AdminBranchesScreen() {
   };
 
   const handleCreateBranch = async () => {
-    if (!name || !address || !phone) {
+    if (!name.trim() || name.trim().length < 3 || !address.trim() || address.trim().length < 5) {
       showPopup({
-        title: 'Campos requeridos',
-        message: 'Por favor completá nombre, dirección y teléfono.',
+        title: 'Datos incompletos',
+        message: 'Ingresá un nombre válido (mínimo 3 caracteres) y la dirección completa del local.',
+        type: 'warning',
+      });
+      return;
+    }
+    const phoneErr = validatePhone(phone, true);
+    if (phoneErr) {
+      showPopup({ title: 'Teléfono inválido', message: phoneErr, type: 'warning' });
+      return;
+    }
+    const parsedTax = parseFloat(taxRate);
+    if (isNaN(parsedTax) || parsedTax < 0 || parsedTax > 100) {
+      showPopup({
+        title: 'Alícuota IVA inválida',
+        message: 'El porcentaje de IVA debe estar entre 0% y 100%.',
         type: 'warning',
       });
       return;
@@ -246,15 +261,19 @@ export default function AdminBranchesScreen() {
                 style={[styles.modalInput, { flex: 1, backgroundColor: colors.inputBg, borderColor: colors.border, color: colors.text }]}
                 placeholder="Teléfono"
                 placeholderTextColor={colors.placeholder}
+                keyboardType="phone-pad"
+                maxLength={22}
                 value={phone}
-                onChangeText={setPhone}
+                onChangeText={(txt) => setPhone(sanitizePhone(txt))}
               />
               <TextInput
                 style={[styles.modalInput, { flex: 1, backgroundColor: colors.inputBg, borderColor: colors.border, color: colors.text }]}
                 placeholder="Alícuota IVA (%)"
                 placeholderTextColor={colors.placeholder}
+                keyboardType="numeric"
+                maxLength={6}
                 value={taxRate}
-                onChangeText={setTaxRate}
+                onChangeText={(txt) => setTaxRate(sanitizeDecimal(txt))}
               />
             </View>
 

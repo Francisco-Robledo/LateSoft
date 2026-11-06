@@ -2,7 +2,6 @@ import bcrypt from 'bcryptjs';
 import { db } from '../../db/connection';
 import { env } from '../../config/env';
 import {
-  AppError,
   ConflictError,
   ForbiddenError,
   NotFoundError,
@@ -182,8 +181,8 @@ export class AuthService {
   }): Promise<AuthResponse> {
     let profile: VerifiedSocialProfile;
 
-    if (data.provider === 'GOOGLE' && data.idToken) {
-      profile = await SocialVerifier.verifyGoogle(data.idToken);
+    if (data.provider === 'GOOGLE' && (data.idToken || data.accessToken)) {
+      profile = await SocialVerifier.verifyGoogle(data.idToken, data.accessToken);
     } else if (data.provider === 'FACEBOOK' && data.accessToken) {
       profile = await SocialVerifier.verifyFacebook(data.accessToken);
     } else if (data.provider === 'GITHUB' && data.code) {

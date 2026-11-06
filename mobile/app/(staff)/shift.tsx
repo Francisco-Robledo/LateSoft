@@ -17,6 +17,7 @@ import { usePopup } from '../../src/context/PopupContext';
 import { apiClient } from '../../src/api/client';
 import { formatPrice, formatDateTime } from '../../src/utils/format';
 import { useTheme } from '../../src/context/ThemeContext';
+import { sanitizeDecimal } from '../../src/utils/validation';
 
 export default function ShiftScreen() {
   const { colors, isDark } = useTheme();
@@ -58,11 +59,12 @@ export default function ShiftScreen() {
   }, [fetchShift]);
 
   const handleOpenShift = async () => {
-    const cash = Number(initialCashInput);
-    if (isNaN(cash) || cash < 0) {
+    const trimmed = initialCashInput.trim();
+    const cash = Number(trimmed);
+    if (!trimmed || isNaN(cash) || cash < 0) {
       showPopup({
         title: 'Monto inválido',
-        message: 'Ingresá un fondo inicial válido en pesos argentinos.',
+        message: 'Ingresá un fondo inicial numérico válido (mayor o igual a $0).',
         type: 'warning',
       });
       return;
@@ -97,11 +99,12 @@ export default function ShiftScreen() {
   };
 
   const handleCloseShift = () => {
-    const counted = Number(finalCashInput);
-    if (isNaN(counted) || counted < 0) {
+    const trimmed = finalCashInput.trim();
+    const counted = Number(trimmed);
+    if (!trimmed || isNaN(counted) || counted < 0) {
       showPopup({
         title: 'Monto inválido',
-        message: 'Ingresá el total de efectivo contado en gaveta.',
+        message: 'Ingresá el total numérico de efectivo contado en gaveta.',
         type: 'warning',
       });
       return;
@@ -206,8 +209,9 @@ export default function ShiftScreen() {
               <TextInput
                 style={[styles.input, { backgroundColor: colors.inputBg, borderColor: colors.border, color: colors.text }]}
                 value={initialCashInput}
-                onChangeText={setInitialCashInput}
+                onChangeText={(txt) => setInitialCashInput(sanitizeDecimal(txt))}
                 keyboardType="numeric"
+                maxLength={12}
                 placeholder="Ej. 15000"
                 placeholderTextColor={colors.placeholder}
               />
@@ -308,8 +312,9 @@ export default function ShiftScreen() {
                 <TextInput
                   style={[styles.input, styles.cashCountedInput, { backgroundColor: colors.inputBg, color: colors.text, borderColor: colors.primary }]}
                   value={finalCashInput}
-                  onChangeText={setFinalCashInput}
+                  onChangeText={(txt) => setFinalCashInput(sanitizeDecimal(txt))}
                   keyboardType="numeric"
+                  maxLength={12}
                   placeholder="0.00"
                   placeholderTextColor={colors.placeholder}
                 />
