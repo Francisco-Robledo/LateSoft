@@ -296,7 +296,7 @@ export default function CustomerOrdersScreen() {
 
   return (
     <Screen style={styles.screen}>
-      <View style={[styles.header, isDesktop && { maxWidth: 1200, width: '100%', alignSelf: 'center' }]}>
+      <View style={[styles.header, { width: '100%' }]}>
         <Text style={[styles.headerTitle, { color: colors.text }]}>Mis Pedidos</Text>
         <Text style={[styles.headerSubtitle, { color: colors.textSecondary }]}>
           Seguimiento en vivo cada 5 segundos
@@ -311,7 +311,7 @@ export default function CustomerOrdersScreen() {
         keyExtractor={(item) => String(item.id)}
         key={isDesktop ? 'orders-grid-2' : 'orders-list-1'}
         numColumns={isDesktop ? 2 : 1}
-        contentContainerStyle={[styles.list, isDesktop && { maxWidth: 1200, width: '100%', alignSelf: 'center' }]}
+        contentContainerStyle={[styles.list, { width: '100%' }]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} />}
         ListEmptyComponent={
           !loading ? (

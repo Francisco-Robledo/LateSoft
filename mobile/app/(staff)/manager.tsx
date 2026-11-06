@@ -171,32 +171,40 @@ export default function ManagerScreen() {
       return;
     }
 
-    try {
-      await apiClient.post('/users', {
-        fullName: staffFullName.trim().replace(/\s+/g, ' '),
-        email: staffEmail.trim().toLowerCase(),
-        password: staffPassword,
-        role: staffRole,
-        branchId,
-      });
+    showConfirm({
+      title: 'Confirmar alta de personal',
+      message: `¿Estás seguro de que deseás crear el usuario para "${staffFullName.trim()}" con el rol de ${staffRole === 'CASHIER' ? 'Cajero' : 'Barista'}?`,
+      confirmText: 'Crear Empleado',
+      cancelText: 'Revisar',
+      onConfirm: async () => {
+        try {
+          await apiClient.post('/users', {
+            fullName: staffFullName.trim().replace(/\s+/g, ' '),
+            email: staffEmail.trim().toLowerCase(),
+            password: staffPassword,
+            role: staffRole,
+            branchId,
+          });
 
-      showPopup({
-        title: 'Éxito',
-        message: `${staffRole === 'CASHIER' ? 'Cajero' : 'Barista'} dado de alta exitosamente.`,
-        type: 'success',
-      });
-      setIsStaffModalVisible(false);
-      setStaffFullName('');
-      setStaffEmail('');
-      setStaffPassword('');
-      fetchStaff();
-    } catch (err: any) {
-      showPopup({
-        title: 'Error al crear usuario',
-        message: err.message || 'No se pudo crear el usuario',
-        type: 'error',
-      });
-    }
+          showPopup({
+            title: 'Éxito',
+            message: `${staffRole === 'CASHIER' ? 'Cajero' : 'Barista'} dado de alta exitosamente.`,
+            type: 'success',
+          });
+          setIsStaffModalVisible(false);
+          setStaffFullName('');
+          setStaffEmail('');
+          setStaffPassword('');
+          fetchStaff();
+        } catch (err: any) {
+          showPopup({
+            title: 'Error al crear usuario',
+            message: err.message || 'No se pudo crear el usuario',
+            type: 'error',
+          });
+        }
+      },
+    });
   };
 
   // ABML PERSONAL: Baja lógica

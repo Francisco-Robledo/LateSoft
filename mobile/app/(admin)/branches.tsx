@@ -79,46 +79,54 @@ export default function AdminBranchesScreen() {
       return;
     }
 
-    try {
-      const branchSlug = slug || name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-      const payload = {
-        name,
-        slug: branchSlug.toLowerCase().trim(),
-        address,
-        latitude: -34.6037,
-        longitude: -58.3816,
-        phone,
-        taxRate: parseFloat(taxRate) || 21.00,
-        openingHours: {
-          monday: { open: '08:00', close: '20:00' },
-          tuesday: { open: '08:00', close: '20:00' },
-          wednesday: { open: '08:00', close: '20:00' },
-          thursday: { open: '08:00', close: '20:00' },
-          friday: { open: '08:00', close: '21:00' },
-          saturday: { open: '09:00', close: '21:00' },
-          sunday: { open: '09:00', close: '20:00' },
-        },
-      };
+    const branchSlug = slug || name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    const payload = {
+      name: name.trim(),
+      slug: branchSlug.toLowerCase().trim(),
+      address: address.trim(),
+      latitude: -34.6037,
+      longitude: -58.3816,
+      phone: phone.trim(),
+      taxRate: parseFloat(taxRate) || 21.00,
+      openingHours: {
+        monday: { open: '08:00', close: '20:00' },
+        tuesday: { open: '08:00', close: '20:00' },
+        wednesday: { open: '08:00', close: '20:00' },
+        thursday: { open: '08:00', close: '20:00' },
+        friday: { open: '08:00', close: '21:00' },
+        saturday: { open: '09:00', close: '21:00' },
+        sunday: { open: '09:00', close: '20:00' },
+      },
+    };
 
-      await apiClient.post('/branches', payload);
-      showPopup({
-        title: 'Éxito',
-        message: 'Sucursal dada de alta correctamente.',
-        type: 'success',
-      });
+    showConfirm({
+      title: 'Confirmar alta de sucursal',
+      message: `¿Estás seguro de que deseás crear la sucursal "${payload.name}"?`,
+      confirmText: 'Crear Sucursal',
+      cancelText: 'Revisar',
+      onConfirm: async () => {
+        try {
+          await apiClient.post('/branches', payload);
+          showPopup({
+            title: 'Éxito',
+            message: 'Sucursal dada de alta correctamente.',
+            type: 'success',
+          });
 
-      setIsModalVisible(false);
-      setName('');
-      setSlug('');
-      setAddress('');
-      fetchBranches();
-    } catch (err: any) {
-      showPopup({
-        title: 'Error',
-        message: err.message || 'No se pudo crear la sucursal',
-        type: 'error',
-      });
-    }
+          setIsModalVisible(false);
+          setName('');
+          setSlug('');
+          setAddress('');
+          fetchBranches();
+        } catch (err: any) {
+          showPopup({
+            title: 'Error',
+            message: err.message || 'No se pudo crear la sucursal',
+            type: 'error',
+          });
+        }
+      },
+    });
   };
 
   const handleToggleActive = async (branch: any) => {
@@ -148,21 +156,29 @@ export default function AdminBranchesScreen() {
         },
       });
     } else {
-      try {
-        await apiClient.put(`/branches/${branch.id}`, { isActive: true });
-        showPopup({
-          title: 'Sucursal reactivada',
-          message: `La sucursal "${branch.name}" fue reactivada.`,
-          type: 'success',
-        });
-        fetchBranches();
-      } catch (err: any) {
-        showPopup({
-          title: 'Error',
-          message: err.message || 'No se pudo reactivar la sucursal',
-          type: 'error',
-        });
-      }
+      showConfirm({
+        title: 'Reactivar sucursal',
+        message: `¿Confirmás reactivar la sucursal "${branch.name}"?`,
+        confirmText: 'Reactivar',
+        cancelText: 'Cancelar',
+        onConfirm: async () => {
+          try {
+            await apiClient.put(`/branches/${branch.id}`, { isActive: true });
+            showPopup({
+              title: 'Sucursal reactivada',
+              message: `La sucursal "${branch.name}" fue reactivada.`,
+              type: 'success',
+            });
+            fetchBranches();
+          } catch (err: any) {
+            showPopup({
+              title: 'Error',
+              message: err.message || 'No se pudo reactivar la sucursal',
+              type: 'error',
+            });
+          }
+        },
+      });
     }
   };
 

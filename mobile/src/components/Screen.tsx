@@ -26,11 +26,11 @@ export function Screen({
   scrollable = false,
   style,
   contentContainerStyle,
-  maxWidth = 1280,
+  maxWidth,
   showScrollToTop = true,
 }: ScreenProps) {
   const { width } = useWindowDimensions();
-  const isWide = width > maxWidth;
+  const isWide = !!maxWidth && width > maxWidth;
   const { colors, isDark } = useTheme();
   const { scrollRef, showScrollTop, handleScroll, scrollToTop } = useScrollToTop(160);
 

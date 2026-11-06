@@ -173,37 +173,45 @@ export default function AdminManagersScreen() {
       });
       return;
     }
-    setSaving(true);
-    try {
-      await apiClient.post('/users', {
-        fullName: fullName.trim().replace(/\s+/g, ' '),
-        email: email.trim().toLowerCase(),
-        password,
-        role: newRole,
-        ...(needsBranch ? { branchId: selectedBranchId } : {}),
-        ...(phone.trim() ? { phone: phone.trim() } : {}),
-      });
-      setIsCreateModalVisible(false);
-      setFullName('');
-      setEmail('');
-      setPassword('');
-      setPhone('');
-      setNewRole('MANAGER');
-      showPopup({
-        title: 'Usuario creado',
-        message: 'La cuenta se creó correctamente.',
-        type: 'success',
-      });
-      loadUsers(1);
-    } catch (err: any) {
-      showPopup({
-        title: 'Error',
-        message: err.message || 'No se pudo crear el usuario.',
-        type: 'error',
-      });
-    } finally {
-      setSaving(false);
-    }
+    showConfirm({
+      title: 'Confirmar creación',
+      message: `¿Estás seguro de que deseás dar de alta al usuario "${fullName.trim()}" con el rol ${newRole}?`,
+      confirmText: 'Crear Usuario',
+      cancelText: 'Revisar',
+      onConfirm: async () => {
+        setSaving(true);
+        try {
+          await apiClient.post('/users', {
+            fullName: fullName.trim().replace(/\s+/g, ' '),
+            email: email.trim().toLowerCase(),
+            password,
+            role: newRole,
+            ...(needsBranch ? { branchId: selectedBranchId } : {}),
+            ...(phone.trim() ? { phone: phone.trim() } : {}),
+          });
+          setIsCreateModalVisible(false);
+          setFullName('');
+          setEmail('');
+          setPassword('');
+          setPhone('');
+          setNewRole('MANAGER');
+          showPopup({
+            title: 'Usuario creado',
+            message: 'La cuenta se creó correctamente.',
+            type: 'success',
+          });
+          loadUsers(1);
+        } catch (err: any) {
+          showPopup({
+            title: 'Error',
+            message: err.message || 'No se pudo crear el usuario.',
+            type: 'error',
+          });
+        } finally {
+          setSaving(false);
+        }
+      },
+    });
   };
 
   // 2. UPDATE (Abrir modal con datos precargados)
@@ -245,32 +253,40 @@ export default function AdminManagersScreen() {
       return;
     }
 
-    setUpdating(true);
-    try {
-      await apiClient.post(`/users/${editingUser.id}/update`, {
-        fullName: editFullName.trim(),
-        phone: editPhone.trim() || null,
-        role: editRole,
-        branchId: editNeedsBranch ? editBranchId : null,
-        isActive: editIsActive,
-      });
+    showConfirm({
+      title: 'Confirmar modificación',
+      message: `¿Estás seguro de que deseás guardar los cambios en la cuenta de "${editFullName.trim()}"?`,
+      confirmText: 'Guardar Cambios',
+      cancelText: 'Revisar',
+      onConfirm: async () => {
+        setUpdating(true);
+        try {
+          await apiClient.post(`/users/${editingUser.id}/update`, {
+            fullName: editFullName.trim(),
+            phone: editPhone.trim() || null,
+            role: editRole,
+            branchId: editNeedsBranch ? editBranchId : null,
+            isActive: editIsActive,
+          });
 
-      showPopup({
-        title: 'Usuario actualizado',
-        message: `Los datos de "${editFullName}" fueron guardados correctamente.`,
-        type: 'success',
-      });
-      setEditingUser(null);
-      loadUsers(page);
-    } catch (err: any) {
-      showPopup({
-        title: 'Error al actualizar',
-        message: err.message || 'No se pudieron guardar los cambios del usuario.',
-        type: 'error',
-      });
-    } finally {
-      setUpdating(false);
-    }
+          showPopup({
+            title: 'Usuario actualizado',
+            message: `Los datos de "${editFullName.trim()}" fueron guardados correctamente.`,
+            type: 'success',
+          });
+          setEditingUser(null);
+          loadUsers(page);
+        } catch (err: any) {
+          showPopup({
+            title: 'Error al actualizar',
+            message: err.message || 'No se pudieron guardar los cambios del usuario.',
+            type: 'error',
+          });
+        } finally {
+          setUpdating(false);
+        }
+      },
+    });
   };
 
   // 3. DELETE (Dar de baja o borrar permanentemente)

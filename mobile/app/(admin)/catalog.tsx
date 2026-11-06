@@ -200,26 +200,34 @@ export default function AdminCatalogScreen() {
       return;
     }
 
-    try {
-      await apiClient.post('/products', payload);
-      setIsProductModalVisible(false);
-      setEditingProduct(null);
-      setProductName('');
-      setProductDesc('');
-      setProductPrice('');
-      fetchCatalog();
-      showPopup({
-        title: 'Producto Creado',
-        message: `"${payload.name}" fue incorporado al catálogo de la marca.`,
-        type: 'success',
-      });
-    } catch (err: any) {
-      showPopup({
-        title: 'Error',
-        message: err.response?.data?.error?.message || err.message || 'No se pudo guardar el producto',
-        type: 'error',
-      });
-    }
+    showConfirm({
+      title: 'Confirmar creación',
+      message: `¿Estás seguro de que deseás incorporar "${payload.name}" al catálogo?`,
+      confirmText: 'Crear Producto',
+      cancelText: 'Revisar',
+      onConfirm: async () => {
+        try {
+          await apiClient.post('/products', payload);
+          setIsProductModalVisible(false);
+          setEditingProduct(null);
+          setProductName('');
+          setProductDesc('');
+          setProductPrice('');
+          fetchCatalog();
+          showPopup({
+            title: 'Producto Creado',
+            message: `"${payload.name}" fue incorporado al catálogo de la marca.`,
+            type: 'success',
+          });
+        } catch (err: any) {
+          showPopup({
+            title: 'Error',
+            message: err.response?.data?.error?.message || err.message || 'No se pudo guardar el producto',
+            type: 'error',
+          });
+        }
+      },
+    });
   };
 
   const openCreateCategoryModal = () => {
@@ -282,24 +290,32 @@ export default function AdminCatalogScreen() {
       return;
     }
 
-    try {
-      await apiClient.post('/categories', payload);
-      setIsCategoryModalVisible(false);
-      setEditingCategory(null);
-      setCategoryName('');
-      fetchCatalog();
-      showPopup({
-        title: 'Categoría Creada',
-        message: 'Categoría creada exitosamente.',
-        type: 'success',
-      });
-    } catch (err: any) {
-      showPopup({
-        title: 'Error',
-        message: err.response?.data?.error?.message || err.message || 'No se pudo guardar la categoría',
-        type: 'error',
-      });
-    }
+    showConfirm({
+      title: 'Confirmar creación',
+      message: `¿Estás seguro de que deseás crear la categoría "${payload.name}"?`,
+      confirmText: 'Crear Categoría',
+      cancelText: 'Revisar',
+      onConfirm: async () => {
+        try {
+          await apiClient.post('/categories', payload);
+          setIsCategoryModalVisible(false);
+          setEditingCategory(null);
+          setCategoryName('');
+          fetchCatalog();
+          showPopup({
+            title: 'Categoría Creada',
+            message: 'Categoría creada exitosamente.',
+            type: 'success',
+          });
+        } catch (err: any) {
+          showPopup({
+            title: 'Error',
+            message: err.response?.data?.error?.message || err.message || 'No se pudo guardar la categoría',
+            type: 'error',
+          });
+        }
+      },
+    });
   };
 
   const handleDeleteProduct = (productId: number, name: string) => {

@@ -43,19 +43,15 @@ export function ThemeFloatingButton({
   }
 
   const safeBottom = Math.max(insets.bottom, 0);
-  // Con tabs: 56px de tab + safeBottom + 12px de margen
-  // Sin tabs: safeBottom + 16px
-  const defaultBottom = isFullScreenWithoutTabs ? (safeBottom + 16) : (56 + safeBottom + 12);
+  const isDesktop = width >= 768;
+  // Con tabs: 62px en desktop / 56px en móvil + safeBottom + margen
+  const defaultBottom = isFullScreenWithoutTabs
+    ? (safeBottom + 16)
+    : (isDesktop ? 74 : (56 + safeBottom + 12));
   const calculatedBottom = bottomOffset !== undefined ? bottomOffset : defaultBottom;
 
-  // En pantallas anchas de PC, si estamos en vista de cliente o login/registro,
-  // posicionar el botón anclado al marco móvil (480px) para que no flote en el vacío del monitor
-  const isMobileSection = !pathname.includes('/staff') && !pathname.includes('/admin');
-  const isDesktop = width > 520;
-  const calculatedRight =
-    isDesktop && isMobileSection
-      ? Math.max(16, (width - 480) / 2 + 16)
-      : rightOffset;
+  // Botón flotante anclado siempre al lateral derecho de la pantalla
+  const calculatedRight = isDesktop ? 24 : rightOffset;
 
   const handlePress = async () => {
     try {
