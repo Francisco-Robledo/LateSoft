@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useCallback, useRef, ReactNode } from 'react';
 import {
   Modal,
   View,
@@ -38,39 +38,64 @@ export function PopupProvider({ children }: { children: ReactNode }) {
   const { colors, isDark } = useTheme();
   const [popup, setPopup] = useState<PopupOptions | null>(null);
   const [isOpen, setIsOpen] = useState(false);
+  const [popupKey, setPopupKey] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const isOpenRef = useRef(false);
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearPendingClose = useCallback(() => {
+    if (closeTimerRef.current) {
+      clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = null;
+    }
+  }, []);
+
+  const scheduleUnmount = useCallback((expectedPopup?: PopupOptions) => {
+    clearPendingClose();
+    closeTimerRef.current = setTimeout(() => {
+      setPopup((curr) => (!expectedPopup || curr === expectedPopup ? null : curr));
+      closeTimerRef.current = null;
+    }, 220);
+  }, [clearPendingClose]);
 
   const hidePopup = useCallback(() => {
     setIsOpen(false);
+    isOpenRef.current = false;
     setIsSubmitting(false);
     if (popup?.onCancel) {
       popup.onCancel();
     }
-    setTimeout(() => {
-      setPopup(null);
-    }, 200);
-  }, [popup]);
+    scheduleUnmount(popup || undefined);
+  }, [popup, scheduleUnmount]);
+
+  const openModalWithOptions = useCallback((nextOptions: PopupOptions) => {
+    clearPendingClose();
+    if (!isOpenRef.current) {
+      setPopupKey((k) => k + 1);
+    }
+    setPopup(nextOptions);
+    isOpenRef.current = true;
+    setIsOpen(true);
+  }, [clearPendingClose]);
 
   const showPopup = useCallback((options: PopupOptions) => {
-    setPopup({
+    openModalWithOptions({
       type: 'info',
       confirmText: 'Aceptar',
       ...options,
     });
-    setIsOpen(true);
-  }, []);
+  }, [openModalWithOptions]);
 
   const showConfirm = useCallback(
     (options: Omit<PopupOptions, 'type'> & { onConfirm: () => void | Promise<void> }) => {
-      setPopup({
+      openModalWithOptions({
         type: 'confirm',
         confirmText: options.confirmText || 'Confirmar',
         cancelText: options.cancelText || 'Cancelar',
         ...options,
       });
-      setIsOpen(true);
     },
-    []
+    [openModalWithOptions]
   );
 
   const handleConfirm = async () => {
@@ -87,9 +112,8 @@ export function PopupProvider({ children }: { children: ReactNode }) {
       setPopup((latest) => {
         if (latest === currentConfirm) {
           setIsOpen(false);
-          setTimeout(() => {
-            setPopup((curr) => (curr === currentConfirm ? null : curr));
-          }, 200);
+          isOpenRef.current = false;
+          scheduleUnmount(currentConfirm);
         }
         return latest;
       });
@@ -97,9 +121,8 @@ export function PopupProvider({ children }: { children: ReactNode }) {
       setPopup((latest) => {
         if (latest === currentConfirm) {
           setIsOpen(false);
-          setTimeout(() => {
-            setPopup((curr) => (curr === currentConfirm ? null : curr));
-          }, 200);
+          isOpenRef.current = false;
+          scheduleUnmount(currentConfirm);
         }
         return latest;
       });
@@ -133,58 +156,62 @@ export function PopupProvider({ children }: { children: ReactNode }) {
   return (
     <PopupContext.Provider value={{ showPopup, showConfirm, hidePopup }}>
       {children}
-      <Modal
-        visible={isOpen}
-        transparent
-        animationType="fade"
-        onRequestClose={hidePopup}
-      >
-        <TouchableWithoutFeedback onPress={isConfirmType ? undefined : hidePopup}>
-          <View style={styles.overlay}>
-            <TouchableWithoutFeedback>
-              <View style={[styles.popupCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                <View style={[styles.iconContainer, { backgroundColor: iconConfig.bg }]}>
-                  <Ionicons name={iconConfig.name} size={30} color={iconConfig.color} />
-                </View>
+      {!!popup && (
+        <Modal
+          key={`popup-modal-${popupKey}`}
+          visible={isOpen}
+          transparent
+          statusBarTranslucent
+          animationType="fade"
+          onRequestClose={hidePopup}
+        >
+          <TouchableWithoutFeedback onPress={isConfirmType ? undefined : hidePopup}>
+            <View style={styles.overlay}>
+              <TouchableWithoutFeedback>
+                <View style={[styles.popupCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                  <View style={[styles.iconContainer, { backgroundColor: iconConfig.bg }]}>
+                    <Ionicons name={iconConfig.name} size={30} color={iconConfig.color} />
+                  </View>
 
-                <Text style={[styles.title, { color: colors.text }]}>{popup?.title}</Text>
-                <Text style={[styles.message, { color: colors.textSecondary }]}>{popup?.message}</Text>
+                  <Text style={[styles.title, { color: colors.text }]}>{popup?.title}</Text>
+                  <Text style={[styles.message, { color: colors.textSecondary }]}>{popup?.message}</Text>
 
-                <View style={styles.buttonContainer}>
-                  {isConfirmType ? (
-                    <>
+                  <View style={styles.buttonContainer}>
+                    {isConfirmType ? (
+                      <>
+                        <Button
+                          title={popup?.cancelText || 'Cancelar'}
+                          variant="outline"
+                          size="medium"
+                          onPress={hidePopup}
+                          disabled={isSubmitting}
+                          style={styles.cancelButton}
+                        />
+                        <Button
+                          title={popup?.confirmText || 'Confirmar'}
+                          variant={popup?.isDestructive ? 'danger' : 'primary'}
+                          size="medium"
+                          isLoading={isSubmitting}
+                          onPress={handleConfirm}
+                          style={styles.confirmButton}
+                        />
+                      </>
+                    ) : (
                       <Button
-                        title={popup?.cancelText || 'Cancelar'}
-                        variant="outline"
+                        title={popup?.confirmText || 'Entendido'}
+                        variant={popup?.type === 'error' ? 'danger' : 'primary'}
                         size="medium"
-                        onPress={hidePopup}
-                        disabled={isSubmitting}
-                        style={styles.cancelButton}
-                      />
-                      <Button
-                        title={popup?.confirmText || 'Confirmar'}
-                        variant={popup?.isDestructive ? 'danger' : 'primary'}
-                        size="medium"
-                        isLoading={isSubmitting}
                         onPress={handleConfirm}
-                        style={styles.confirmButton}
+                        style={styles.singleButton}
                       />
-                    </>
-                  ) : (
-                    <Button
-                      title={popup?.confirmText || 'Entendido'}
-                      variant={popup?.type === 'error' ? 'danger' : 'primary'}
-                      size="medium"
-                      onPress={handleConfirm}
-                      style={styles.singleButton}
-                    />
-                  )}
+                    )}
+                  </View>
                 </View>
-              </View>
-            </TouchableWithoutFeedback>
-          </View>
-        </TouchableWithoutFeedback>
-      </Modal>
+              </TouchableWithoutFeedback>
+            </View>
+          </TouchableWithoutFeedback>
+        </Modal>
+      )}
     </PopupContext.Provider>
   );
 }

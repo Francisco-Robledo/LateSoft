@@ -10,7 +10,7 @@ import {
   Image,
   useWindowDimensions,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Screen } from '../../src/components/Screen';
 import { Card } from '../../src/components/Card';
@@ -75,6 +75,7 @@ export default function PosScreen() {
   const branchId = user?.branchId || 1;
 
   const [activeTab, setActiveTab] = useState<'POS' | 'PENDING_APP' | 'TRANSFERS'>('POS');
+  const [hasOpenShift, setHasOpenShift] = useState<boolean | null>(null);
   const [products, setProducts] = useState<PosProduct[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [ticketItems, setTicketItems] = useState<TicketItem[]>([]);
@@ -135,18 +136,49 @@ export default function PosScreen() {
     }
   }, [branchId]);
 
+  const fetchCurrentShift = useCallback(async () => {
+    try {
+      const res = await apiClient.post('/shifts/current', { branchId });
+      setHasOpenShift(Boolean(res.data?.data?.hasOpenShift));
+    } catch (err) {
+      console.error('[POS] Error verificando estado de caja:', err);
+    }
+  }, [branchId]);
+
   useEffect(() => {
     fetchMenu();
+    fetchCurrentShift();
     fetchPendingAppOrders();
     fetchPendingTransfers();
 
     const interval = setInterval(() => {
+      fetchCurrentShift();
       fetchPendingAppOrders();
       fetchPendingTransfers();
     }, 5000);
 
     return () => clearInterval(interval);
-  }, [fetchMenu, fetchPendingAppOrders, fetchPendingTransfers]);
+  }, [fetchMenu, fetchCurrentShift, fetchPendingAppOrders, fetchPendingTransfers]);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchCurrentShift();
+      fetchPendingAppOrders();
+      fetchPendingTransfers();
+    }, [fetchCurrentShift, fetchPendingAppOrders, fetchPendingTransfers])
+  );
+
+  const requireOpenShift = (actionLabel: string): boolean => {
+    if (hasOpenShift === true) return true;
+    showConfirm({
+      title: 'Caja cerrada',
+      message: `No hay un turno de caja activo en esta sucursal. Abrí la caja antes de ${actionLabel}.`,
+      confirmText: 'Ir a Abrir Caja',
+      cancelText: 'Cerrar',
+      onConfirm: () => router.push('/(staff)/shift' as any),
+    });
+    return false;
+  };
 
   const addToTicket = (product: PosProduct) => {
     if (!product.is_available) {
@@ -195,6 +227,7 @@ export default function PosScreen() {
 
   // Cobro de pedido creado en POS
   const handleConfirmPosPayment = async () => {
+    if (!requireOpenShift('registrar ventas')) return;
     if (paymentMethod === 'CASH') {
       const tenderedNum = parseFloat(cashTendered.replace(',', '.'));
       if (!cashTendered.trim() || isNaN(tenderedNum) || tenderedNum < ticketTotal) {
@@ -252,6 +285,7 @@ export default function PosScreen() {
   // Cobro de pedido hecho desde la app (UNPAID -> PAID)
   const handlePayAppOrder = async () => {
     if (!selectedAppOrder) return;
+    if (!requireOpenShift('cobrar pedidos de la app')) return;
     if (paymentMethod === 'CASH') {
       const tenderedNum = parseFloat(cashTendered.replace(',', '.'));
       if (!cashTendered.trim() || isNaN(tenderedNum) || tenderedNum < selectedAppOrder.total_amount) {
@@ -297,6 +331,7 @@ export default function PosScreen() {
   const cashNum = parseFloat(cashTendered.replace(',', '.')) || 0;
 
   const handleApproveTransfer = (order: PendingTransferOrder) => {
+    if (!requireOpenShift('aprobar pagos por transferencia')) return;
     showConfirm({
       title: 'Aprobar Pago Mercado Pago',
       message: `¿Confirmás la acreditación de ${formatPrice(order.total_amount)} con N° de Operación ${order.transfer_reference} para la Comanda #${order.order_number}? El pedido se enviará de inmediato al KDS de la cocina.`,
@@ -324,6 +359,7 @@ export default function PosScreen() {
 
   const handleConfirmRejectTransfer = async () => {
     if (!orderToReject) return;
+    if (!requireOpenShift('rechazar comprobantes de transferencia')) return;
     if (!rejectionReason.trim() || rejectionReason.trim().length < 5) {
       showPopup({
         title: 'Motivo requerido',
@@ -427,6 +463,31 @@ export default function PosScreen() {
           </TouchableOpacity>
         </View>
       </View>
+
+      {hasOpenShift === false && (
+        <View
+          style={[
+            styles.shiftWarningBanner,
+            {
+              backgroundColor: isDark ? 'rgba(245, 158, 11, 0.14)' : '#FFFBEB',
+              borderBottomColor: isDark ? 'rgba(245, 158, 11, 0.35)' : '#FDE68A',
+            },
+          ]}
+        >
+          <View style={styles.shiftWarningLeft}>
+            <Ionicons name="lock-closed" size={18} color={isDark ? '#FBBF24' : '#B45309'} />
+            <Text style={[styles.shiftWarningText, { color: isDark ? '#FDE68A' : '#92400E' }]}>
+              Caja cerrada: abrí un turno para cobrar o aprobar pedidos.
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={[styles.shiftWarningBtn, { backgroundColor: isDark ? '#D97706' : '#B45309' }]}
+            onPress={() => router.push('/(staff)/shift' as any)}
+          >
+            <Text style={styles.shiftWarningBtnText}>Abrir Caja</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Selector de 3 pestañas limpio, adaptativo y sin solapamientos de texto */}
       <View style={[styles.tabBar, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
@@ -702,7 +763,10 @@ export default function PosScreen() {
               <Button
                 title={`Cobrar • ${formatPrice(ticketTotal)}`}
                 disabled={ticketItems.length === 0}
-                onPress={() => setIsPayModalVisible(true)}
+                onPress={() => {
+                  if (!requireOpenShift('cobrar pedidos en mostrador')) return;
+                  setIsPayModalVisible(true);
+                }}
               />
             </View>
           </View>
@@ -744,6 +808,7 @@ export default function PosScreen() {
                   size="small"
                   style={{ flex: 1 }}
                   onPress={() => {
+                    if (!requireOpenShift('cobrar pedidos de la app')) return;
                     setSelectedAppOrder(item);
                     setPaymentMethod('CASH');
                     setCashTendered(String(item.total_amount));
@@ -854,6 +919,7 @@ export default function PosScreen() {
                   textStyle={{ color: '#EF4444' }}
                   icon={<Ionicons name="close-circle-outline" size={16} color="#EF4444" />}
                   onPress={() => {
+                    if (!requireOpenShift('rechazar comprobantes de transferencia')) return;
                     setOrderToReject(item);
                     setRejectionReason('El monto de la transferencia no coincide');
                   }}
@@ -1633,5 +1699,36 @@ const styles = StyleSheet.create({
     padding: 10,
     fontSize: 13,
     marginBottom: 6,
+  },
+  shiftWarningBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    gap: 10,
+  },
+  shiftWarningLeft: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    minWidth: 0,
+  },
+  shiftWarningText: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  shiftWarningBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 8,
+  },
+  shiftWarningBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '800',
   },
 });

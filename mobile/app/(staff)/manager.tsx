@@ -16,13 +16,15 @@ import { Button } from '../../src/components/Button';
 import { useAuth } from '../../src/context/AuthContext';
 import { usePopup } from '../../src/context/PopupContext';
 import { apiClient } from '../../src/api/client';
-import { formatPrice } from '../../src/utils/format';
+import { formatPrice, getReportDateBounds, REPORT_DATE_RANGE_OPTIONS, ReportDateRange } from '../../src/utils/format';
 import { useTheme } from '../../src/context/ThemeContext';
 import {
   isValidEmail,
   sanitizeDecimal,
   sanitizeName,
+  sanitizePhone,
   validateFullName,
+  validatePhone,
 } from '../../src/utils/validation';
 
 export default function ManagerScreen() {
@@ -42,10 +44,13 @@ export default function ManagerScreen() {
   // Personal
   const [staffList, setStaffList] = useState<any[]>([]);
   const [isStaffModalVisible, setIsStaffModalVisible] = useState(false);
+  const [editingStaff, setEditingStaff] = useState<any | null>(null);
   const [staffFullName, setStaffFullName] = useState('');
   const [staffEmail, setStaffEmail] = useState('');
+  const [staffPhone, setStaffPhone] = useState('');
   const [staffPassword, setStaffPassword] = useState('');
   const [staffRole, setStaffRole] = useState<'CASHIER' | 'BARISTA'>('CASHIER');
+  const [staffIsActive, setStaffIsActive] = useState(true);
 
   // Pedidos para cancelar
   const [orders, setOrders] = useState<any[]>([]);
@@ -53,6 +58,7 @@ export default function ManagerScreen() {
   const [cancelReason, setCancelReason] = useState('');
 
   // Reportes
+  const [reportRange, setReportRange] = useState<ReportDateRange>('30days');
   const [salesReport, setSalesReport] = useState<any | null>(null);
   const [topProducts, setTopProducts] = useState<any[]>([]);
 
@@ -89,15 +95,16 @@ export default function ManagerScreen() {
 
   const fetchReports = useCallback(async () => {
     try {
-      const salesRes = await apiClient.post('/reports/sales', { branchId });
+      const bounds = getReportDateBounds(reportRange);
+      const salesRes = await apiClient.post('/reports/sales', { branchId, ...bounds });
       setSalesReport(salesRes.data);
 
-      const topRes = await apiClient.post('/reports/top-products', { branchId });
+      const topRes = await apiClient.post('/reports/top-products', { branchId, ...bounds });
       setTopProducts(topRes.data.data);
     } catch (err) {
       console.error('[Manager] Error cargando reportes:', err);
     }
-  }, [branchId]);
+  }, [branchId, reportRange]);
 
   useEffect(() => {
     if (activeTab === 'MENU') fetchMenu();
@@ -147,8 +154,30 @@ export default function ManagerScreen() {
     });
   };
 
-  // ABML PERSONAL: Alta
-  const handleCreateStaff = async () => {
+  const openCreateStaffModal = () => {
+    setEditingStaff(null);
+    setStaffFullName('');
+    setStaffEmail('');
+    setStaffPhone('');
+    setStaffPassword('');
+    setStaffRole('CASHIER');
+    setStaffIsActive(true);
+    setIsStaffModalVisible(true);
+  };
+
+  const openEditStaffModal = (emp: any) => {
+    setEditingStaff(emp);
+    setStaffFullName(emp.full_name || '');
+    setStaffEmail(emp.email || '');
+    setStaffPhone(emp.phone || '');
+    setStaffPassword('');
+    setStaffRole(emp.role === 'BARISTA' ? 'BARISTA' : 'CASHIER');
+    setStaffIsActive(Boolean(emp.is_active));
+    setIsStaffModalVisible(true);
+  };
+
+  // ABML PERSONAL: Alta y modificación
+  const handleSaveStaff = async () => {
     const nameErr = validateFullName(staffFullName, true);
     if (nameErr) {
       showPopup({ title: 'Nombre inválido', message: nameErr, type: 'warning' });
@@ -162,44 +191,87 @@ export default function ManagerScreen() {
       });
       return;
     }
-    if (!staffPassword || staffPassword.length < 8 || /\s/.test(staffPassword)) {
+    const phoneErr = validatePhone(staffPhone, false);
+    if (phoneErr) {
+      showPopup({ title: 'Teléfono inválido', message: phoneErr, type: 'warning' });
+      return;
+    }
+
+    const isEditing = Boolean(editingStaff);
+    if (!isEditing) {
+      if (!staffPassword || staffPassword.length < 8 || /\s/.test(staffPassword)) {
+        showPopup({
+          title: 'Contraseña inválida',
+          message: 'La contraseña debe tener al menos 8 caracteres y no contener espacios.',
+          type: 'warning',
+        });
+        return;
+      }
+    } else if (staffPassword.length > 0 && (staffPassword.length < 8 || /\s/.test(staffPassword))) {
       showPopup({
         title: 'Contraseña inválida',
-        message: 'La contraseña debe tener al menos 8 caracteres y no contener espacios.',
+        message: 'Si ingresás una nueva contraseña, debe tener al menos 8 caracteres y no contener espacios.',
         type: 'warning',
       });
       return;
     }
 
+    const cleanName = staffFullName.trim().replace(/\s+/g, ' ');
+    const roleLabel = staffRole === 'CASHIER' ? 'Cajero' : 'Barista';
+
     showConfirm({
-      title: 'Confirmar alta de personal',
-      message: `¿Estás seguro de que deseás crear el usuario para "${staffFullName.trim()}" con el rol de ${staffRole === 'CASHIER' ? 'Cajero' : 'Barista'}?`,
-      confirmText: 'Crear Empleado',
+      title: isEditing ? 'Confirmar cambios de empleado' : 'Confirmar alta de personal',
+      message: isEditing
+        ? `¿Guardás los cambios de "${cleanName}" (${roleLabel})?`
+        : `¿Estás seguro de que deseás crear el usuario para "${cleanName}" con el rol de ${roleLabel}?`,
+      confirmText: isEditing ? 'Guardar Cambios' : 'Crear Empleado',
       cancelText: 'Revisar',
       onConfirm: async () => {
         try {
-          await apiClient.post('/users', {
-            fullName: staffFullName.trim().replace(/\s+/g, ' '),
-            email: staffEmail.trim().toLowerCase(),
-            password: staffPassword,
-            role: staffRole,
-            branchId,
-          });
+          if (isEditing && editingStaff) {
+            const payload: Record<string, any> = {
+              fullName: cleanName,
+              email: staffEmail.trim().toLowerCase(),
+              phone: staffPhone.trim() || null,
+              role: staffRole,
+              isActive: staffIsActive,
+            };
+            if (staffPassword) {
+              payload.password = staffPassword;
+            }
+            await apiClient.put(`/users/${editingStaff.id}`, payload);
+            showPopup({
+              title: 'Empleado actualizado',
+              message: `Se guardaron los datos de "${cleanName}".`,
+              type: 'success',
+            });
+          } else {
+            await apiClient.post('/users', {
+              fullName: cleanName,
+              email: staffEmail.trim().toLowerCase(),
+              phone: staffPhone.trim() || undefined,
+              password: staffPassword,
+              role: staffRole,
+              branchId,
+            });
+            showPopup({
+              title: 'Éxito',
+              message: `${roleLabel} dado de alta exitosamente.`,
+              type: 'success',
+            });
+          }
 
-          showPopup({
-            title: 'Éxito',
-            message: `${staffRole === 'CASHIER' ? 'Cajero' : 'Barista'} dado de alta exitosamente.`,
-            type: 'success',
-          });
           setIsStaffModalVisible(false);
+          setEditingStaff(null);
           setStaffFullName('');
           setStaffEmail('');
+          setStaffPhone('');
           setStaffPassword('');
           fetchStaff();
         } catch (err: any) {
           showPopup({
-            title: 'Error al crear usuario',
-            message: err.message || 'No se pudo crear el usuario',
+            title: isEditing ? 'Error al actualizar empleado' : 'Error al crear usuario',
+            message: err.response?.data?.error?.message || err.message || 'No se pudieron guardar los datos',
             type: 'error',
           });
         }
@@ -371,29 +443,44 @@ export default function ManagerScreen() {
               <Button
                 title="+ Alta Empleado"
                 size="small"
-                onPress={() => setIsStaffModalVisible(true)}
+                onPress={openCreateStaffModal}
               />
             </View>
 
             {staffList.map((emp) => (
               <Card key={emp.id} style={styles.staffCard}>
-                <View>
+                <View style={{ flex: 1, paddingRight: 8 }}>
                   <Text style={[styles.staffName, { color: colors.text }]}>{emp.full_name}</Text>
-                  <Text style={[styles.staffRole, { color: colors.textSecondary }]}>{emp.role} • {emp.email}</Text>
-                  <Text style={{ fontSize: 11, color: emp.is_active ? '#2E7D32' : '#C62828' }}>
+                  <Text style={[styles.staffRole, { color: colors.textSecondary }]}>
+                    {emp.role === 'CASHIER' ? 'Cajero' : emp.role === 'BARISTA' ? 'Barista' : emp.role} • {emp.email}
+                  </Text>
+                  {!!emp.phone && (
+                    <Text style={[styles.staffRole, { color: colors.textMuted }]}>Tel: {emp.phone}</Text>
+                  )}
+                  <Text style={{ fontSize: 11, fontWeight: '600', color: emp.is_active ? '#2E7D32' : '#C62828' }}>
                     {emp.is_active ? 'Activo' : 'Inactivo'}
                   </Text>
                 </View>
 
-                {emp.is_active && (
+                <View style={styles.staffActionsRow}>
                   <TouchableOpacity
-                    style={styles.deactivateBtn}
-                    onPress={() => handleDeactivateStaff(emp.id, emp.full_name)}
-                    accessibilityLabel={`Desactivar a ${emp.full_name}`}
+                    style={[styles.deactivateBtn, { backgroundColor: colors.surfaceSecondary }]}
+                    onPress={() => openEditStaffModal(emp)}
+                    accessibilityLabel={`Editar a ${emp.full_name}`}
                   >
-                    <Ionicons name="trash-outline" size={18} color="#C62828" />
+                    <Ionicons name="create-outline" size={18} color={colors.primary} />
                   </TouchableOpacity>
-                )}
+
+                  {emp.is_active && (
+                    <TouchableOpacity
+                      style={[styles.deactivateBtn, { backgroundColor: isDark ? 'rgba(198,40,40,0.16)' : '#FFEBEE' }]}
+                      onPress={() => handleDeactivateStaff(emp.id, emp.full_name)}
+                      accessibilityLabel={`Desactivar a ${emp.full_name}`}
+                    >
+                      <Ionicons name="trash-outline" size={18} color="#C62828" />
+                    </TouchableOpacity>
+                  )}
+                </View>
               </Card>
             ))}
           </View>
@@ -428,40 +515,79 @@ export default function ManagerScreen() {
         )}
 
         {/* TAB 4: REPORTES */}
-        {activeTab === 'REPORTS' && salesReport && (
+        {activeTab === 'REPORTS' && (
           <View>
             <Text style={[styles.sectionTitle, { color: colors.text }]}>Reporte de Ventas de la Sucursal</Text>
 
-            <View style={styles.kpiGrid}>
-              <Card style={styles.kpiCard}>
-                <Text style={[styles.kpiLabel, { color: colors.textSecondary }]}>Facturación Total</Text>
-                <Text style={[styles.kpiValue, { color: colors.primary }]}>{formatPrice(salesReport.summary.totalRevenue)}</Text>
-              </Card>
-              <Card style={styles.kpiCard}>
-                <Text style={[styles.kpiLabel, { color: colors.textSecondary }]}>Pedidos Totales</Text>
-                <Text style={[styles.kpiValue, { color: colors.primary }]}>{salesReport.summary.totalOrders}</Text>
-              </Card>
-              <Card style={styles.kpiCard}>
-                <Text style={[styles.kpiLabel, { color: colors.textSecondary }]}>Ticket Promedio</Text>
-                <Text style={[styles.kpiValue, { color: colors.primary }]}>{formatPrice(salesReport.summary.averageTicket)}</Text>
-              </Card>
-              <Card style={styles.kpiCard}>
-                <Text style={[styles.kpiLabel, { color: colors.textSecondary }]}>IVA Recaudado (21%)</Text>
-                <Text style={[styles.kpiValue, { color: colors.primary }]}>{formatPrice(salesReport.summary.totalTax)}</Text>
-              </Card>
+            <View style={styles.filterRow}>
+              {REPORT_DATE_RANGE_OPTIONS.map((option) => {
+                const isActive = reportRange === option.key;
+                return (
+                  <TouchableOpacity
+                    key={option.key}
+                    style={[
+                      styles.filterPill,
+                      { backgroundColor: colors.surface, borderColor: colors.border },
+                      isActive && { backgroundColor: colors.primary, borderColor: colors.primary },
+                    ]}
+                    onPress={() => setReportRange(option.key)}
+                  >
+                    <Text
+                      style={[
+                        styles.filterPillText,
+                        { color: colors.textSecondary },
+                        isActive && { color: isDark ? '#111827' : '#FFFFFF', fontWeight: '700' },
+                      ]}
+                    >
+                      {option.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
 
-            <Text style={[styles.sectionTitle, { marginTop: 18, color: colors.text }]}>Productos Más Vendidos</Text>
-            {topProducts.map((p, idx) => (
-              <Card key={idx} style={styles.topProductCard}>
-                <Text style={[styles.topRank, { color: colors.primary }]}>#{idx + 1}</Text>
-                <View style={{ flex: 1, marginHorizontal: 10 }}>
-                  <Text style={[styles.topName, { color: colors.text }]}>{p.product_name}</Text>
-                  <Text style={[styles.topQty, { color: colors.textSecondary }]}>{p.total_quantity} unidades vendidas</Text>
+            {salesReport && (
+              <>
+                <View style={styles.kpiGrid}>
+                  <Card style={styles.kpiCard}>
+                    <Text style={[styles.kpiLabel, { color: colors.textSecondary }]}>Facturación Total</Text>
+                    <Text style={[styles.kpiValue, { color: colors.primary }]}>{formatPrice(salesReport.summary.totalRevenue)}</Text>
+                  </Card>
+                  <Card style={styles.kpiCard}>
+                    <Text style={[styles.kpiLabel, { color: colors.textSecondary }]}>Pedidos Totales</Text>
+                    <Text style={[styles.kpiValue, { color: colors.primary }]}>{salesReport.summary.totalOrders}</Text>
+                  </Card>
+                  <Card style={styles.kpiCard}>
+                    <Text style={[styles.kpiLabel, { color: colors.textSecondary }]}>Ticket Promedio</Text>
+                    <Text style={[styles.kpiValue, { color: colors.primary }]}>{formatPrice(salesReport.summary.averageTicket)}</Text>
+                  </Card>
+                  <Card style={styles.kpiCard}>
+                    <Text style={[styles.kpiLabel, { color: colors.textSecondary }]}>IVA Recaudado (21%)</Text>
+                    <Text style={[styles.kpiValue, { color: colors.primary }]}>{formatPrice(salesReport.summary.totalTax)}</Text>
+                  </Card>
                 </View>
-                <Text style={[styles.topRevenue, { color: colors.primary }]}>{formatPrice(p.total_revenue)}</Text>
-              </Card>
-            ))}
+
+                <Text style={[styles.sectionTitle, { marginTop: 18, color: colors.text }]}>Productos Más Vendidos</Text>
+                {topProducts.length === 0 ? (
+                  <Card style={{ padding: 16 }}>
+                    <Text style={{ color: colors.textMuted, textAlign: 'center', fontSize: 13 }}>
+                      No hay ventas registradas para este período.
+                    </Text>
+                  </Card>
+                ) : (
+                  topProducts.map((p, idx) => (
+                    <Card key={idx} style={styles.topProductCard}>
+                      <Text style={[styles.topRank, { color: colors.primary }]}>#{idx + 1}</Text>
+                      <View style={{ flex: 1, marginHorizontal: 10 }}>
+                        <Text style={[styles.topName, { color: colors.text }]}>{p.product_name}</Text>
+                        <Text style={[styles.topQty, { color: colors.textSecondary }]}>{p.total_quantity} unidades vendidas</Text>
+                      </View>
+                      <Text style={[styles.topRevenue, { color: colors.primary }]}>{formatPrice(p.total_revenue)}</Text>
+                    </Card>
+                  ))
+                )}
+              </>
+            )}
           </View>
         )}
       </ScrollView>
@@ -494,11 +620,21 @@ export default function ManagerScreen() {
         </View>
       </Modal>
 
-      {/* Modal Alta de Personal */}
-      <Modal visible={isStaffModalVisible} transparent animationType="slide">
+      {/* Modal Alta / Edición de Personal */}
+      <Modal
+        visible={isStaffModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => {
+          setIsStaffModalVisible(false);
+          setEditingStaff(null);
+        }}
+      >
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
-            <Text style={[styles.modalTitle, { color: colors.text }]}>Nuevo Empleado en Sucursal</Text>
+            <Text style={[styles.modalTitle, { color: colors.text }]}>
+              {editingStaff ? 'Editar Empleado' : 'Nuevo Empleado en Sucursal'}
+            </Text>
 
             <TextInput
               style={[styles.modalInput, { backgroundColor: colors.inputBg, borderColor: colors.border, color: colors.text }]}
@@ -520,7 +656,16 @@ export default function ManagerScreen() {
             />
             <TextInput
               style={[styles.modalInput, { backgroundColor: colors.inputBg, borderColor: colors.border, color: colors.text }]}
-              placeholder="Contraseña inicial (mínimo 8)"
+              placeholder="Teléfono (opcional)"
+              placeholderTextColor={colors.placeholder}
+              keyboardType="phone-pad"
+              maxLength={20}
+              value={staffPhone}
+              onChangeText={(txt) => setStaffPhone(sanitizePhone(txt))}
+            />
+            <TextInput
+              style={[styles.modalInput, { backgroundColor: colors.inputBg, borderColor: colors.border, color: colors.text }]}
+              placeholder={editingStaff ? 'Nueva contraseña (opcional, mín. 8)' : 'Contraseña inicial (mínimo 8)'}
               placeholderTextColor={colors.placeholder}
               secureTextEntry
               value={staffPassword}
@@ -566,10 +711,54 @@ export default function ManagerScreen() {
               </TouchableOpacity>
             </View>
 
-            <Button title="Crear Empleado" onPress={handleCreateStaff} />
+            {editingStaff && (
+              <View style={{ flexDirection: 'row', gap: 10, marginBottom: 12 }}>
+                <TouchableOpacity
+                  style={[
+                    styles.roleSelectBtn,
+                    { backgroundColor: colors.surfaceSecondary, borderColor: colors.border },
+                    staffIsActive && { borderColor: '#2E7D32', backgroundColor: isDark ? 'rgba(46,125,50,0.18)' : '#E8F5E9' },
+                  ]}
+                  onPress={() => setStaffIsActive(true)}
+                >
+                  <Text
+                    style={[
+                      styles.roleSelectText,
+                      { color: colors.textSecondary },
+                      staffIsActive && { color: isDark ? '#81C784' : '#2E7D32', fontWeight: '800' },
+                    ]}
+                  >
+                    Activo
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.roleSelectBtn,
+                    { backgroundColor: colors.surfaceSecondary, borderColor: colors.border },
+                    !staffIsActive && { borderColor: '#C62828', backgroundColor: isDark ? 'rgba(198,40,40,0.18)' : '#FFEBEE' },
+                  ]}
+                  onPress={() => setStaffIsActive(false)}
+                >
+                  <Text
+                    style={[
+                      styles.roleSelectText,
+                      { color: colors.textSecondary },
+                      !staffIsActive && { color: isDark ? '#EF9A9A' : '#C62828', fontWeight: '800' },
+                    ]}
+                  >
+                    Inactivo
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            <Button title={editingStaff ? 'Guardar Cambios' : 'Crear Empleado'} onPress={handleSaveStaff} />
             <TouchableOpacity
               style={styles.modalCancel}
-              onPress={() => setIsStaffModalVisible(false)}
+              onPress={() => {
+                setIsStaffModalVisible(false);
+                setEditingStaff(null);
+              }}
             >
               <Text style={[styles.modalCancelText, { color: colors.textSecondary }]}>Cancelar</Text>
             </TouchableOpacity>
@@ -889,5 +1078,28 @@ const styles = StyleSheet.create({
   roleSelectTextActive: {
     color: '#6F4E37',
     fontWeight: '800',
+  },
+  staffActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  filterRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 12,
+  },
+  filterPill: {
+    minHeight: 36,
+    justifyContent: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  filterPillText: {
+    fontSize: 12,
+    fontWeight: '600',
   },
 });

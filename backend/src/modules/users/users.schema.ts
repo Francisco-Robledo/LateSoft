@@ -17,6 +17,8 @@ export const updateUserSchema = z.object({
   }),
   body: z.object({
     fullName: z.string().min(2).max(120).optional(),
+    email: z.string().email('Email inválido').optional(),
+    password: z.string().min(8, 'La contraseña debe tener al menos 8 caracteres').optional(),
     phone: z.string().max(30).nullable().optional(),
     isActive: z.boolean().optional(),
     branchId: z.number().int().positive().nullable().optional(),

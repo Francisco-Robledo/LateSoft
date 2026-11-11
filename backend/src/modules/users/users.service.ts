@@ -144,7 +144,15 @@ export class UsersService {
   public static async updateUser(
     currentUser: TokenPayload,
     id: number,
-    payload: { fullName?: string; phone?: string; isActive?: boolean; branchId?: number; role?: string }
+    payload: {
+      fullName?: string;
+      email?: string;
+      password?: string;
+      phone?: string | null;
+      isActive?: boolean;
+      branchId?: number | null;
+      role?: string;
+    }
   ) {
     const targetUser = await db('users').where({ id }).first();
     if (!targetUser) {
@@ -158,23 +166,42 @@ export class UsersService {
       ) {
         throw new ForbiddenError('No tenés permisos para modificar usuarios de otra sucursal');
       }
-      // Un encargado no puede reasignar el branch_id ni el rol
+      if (payload.role && !['CASHIER', 'BARISTA'].includes(payload.role)) {
+        throw new ForbiddenError('El encargado solo puede asignar roles de Cajero o Barista');
+      }
+      // Un encargado no puede reasignar la sucursal
       delete payload.branchId;
-      delete payload.role;
     } else if (currentUser.role !== 'ADMIN') {
       throw new ForbiddenError();
     }
 
     const updateData: any = {
-      full_name: payload.fullName ?? targetUser.full_name,
-      phone: payload.phone ?? targetUser.phone,
+      full_name: payload.fullName !== undefined ? payload.fullName.trim() : targetUser.full_name,
+      phone: payload.phone !== undefined ? (payload.phone ? payload.phone.trim() : null) : targetUser.phone,
       is_active: payload.isActive ?? targetUser.is_active,
       branch_id: payload.branchId !== undefined ? payload.branchId : targetUser.branch_id,
     };
 
-    if (currentUser.role === 'ADMIN' && payload.role) {
-      updateData.role = payload.role;
-      if (['ADMIN', 'CUSTOMER'].includes(payload.role)) {
+    if (payload.email !== undefined) {
+      const normalizedEmail = payload.email.trim().toLowerCase();
+      if (normalizedEmail !== targetUser.email) {
+        const existing = await db('users').where({ email: normalizedEmail }).whereNot({ id }).first();
+        if (existing) {
+          throw new ConflictError('Ya existe un usuario registrado con ese email');
+        }
+        updateData.email = normalizedEmail;
+      }
+    }
+
+    if (payload.password) {
+      updateData.password_hash = await bcrypt.hash(payload.password, 12);
+    }
+
+    if (payload.role) {
+      if (currentUser.role === 'MANAGER' || currentUser.role === 'ADMIN') {
+        updateData.role = payload.role;
+      }
+      if (currentUser.role === 'ADMIN' && ['ADMIN', 'CUSTOMER'].includes(payload.role)) {
         updateData.branch_id = null;
       }
     }

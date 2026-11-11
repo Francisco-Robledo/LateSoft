@@ -14,7 +14,7 @@ import { Card } from '../../src/components/Card';
 import { useAuth } from '../../src/context/AuthContext';
 import { usePopup } from '../../src/context/PopupContext';
 import { apiClient } from '../../src/api/client';
-import { formatPrice } from '../../src/utils/format';
+import { formatPrice, getReportDateBounds, REPORT_DATE_RANGE_OPTIONS, ReportDateRange } from '../../src/utils/format';
 import { useTheme } from '../../src/context/ThemeContext';
 
 export default function AdminDashboardScreen() {
@@ -24,7 +24,7 @@ export default function AdminDashboardScreen() {
   const { showPopup, showConfirm } = usePopup();
   const [branches, setBranches] = useState<any[]>([]);
   const [selectedBranchId, setSelectedBranchId] = useState<number | null>(null);
-  const [dateRange, setDateRange] = useState<'today' | '7days' | '30days'>('30days');
+  const [dateRange, setDateRange] = useState<ReportDateRange>('30days');
 
   const [salesReport, setSalesReport] = useState<any | null>(null);
   const [topProducts, setTopProducts] = useState<any[]>([]);
@@ -42,25 +42,14 @@ export default function AdminDashboardScreen() {
   const fetchMetrics = useCallback(async () => {
     if (authStatus !== 'AUTHENTICATED') return;
     try {
-      const salesPayload: Record<string, any> = {};
+      const bounds = getReportDateBounds(dateRange);
+      const salesPayload: Record<string, any> = { ...bounds };
       if (selectedBranchId) salesPayload.branchId = selectedBranchId;
-
-      const now = new Date();
-      if (dateRange === 'today') {
-        const dStr = now.toISOString().split('T')[0];
-        salesPayload.from = dStr;
-        salesPayload.to = dStr;
-      } else if (dateRange === '7days') {
-        const fromDate = new Date();
-        fromDate.setDate(now.getDate() - 7);
-        salesPayload.from = fromDate.toISOString().split('T')[0];
-        salesPayload.to = now.toISOString().split('T')[0];
-      }
 
       const res = await apiClient.post('/reports/sales', salesPayload);
       setSalesReport(res.data);
 
-      const topPayload: Record<string, any> = { limit: 8 };
+      const topPayload: Record<string, any> = { limit: 8, ...bounds };
       if (selectedBranchId) topPayload.branchId = selectedBranchId;
       const topRes = await apiClient.post('/reports/top-products', topPayload);
       setTopProducts(topRes.data.data);
@@ -124,60 +113,30 @@ export default function AdminDashboardScreen() {
 
       {/* Selector de Rango de Fecha */}
       <View style={styles.filterRow}>
-        <TouchableOpacity
-          style={[
-            styles.filterPill,
-            { backgroundColor: colors.surface, borderColor: colors.border },
-            dateRange === 'today' && [styles.filterPillActive, { backgroundColor: colors.primary, borderColor: colors.primary }],
-          ]}
-          onPress={() => setDateRange('today')}
-        >
-          <Text
-            style={[
-              styles.filterPillText,
-              { color: colors.textSecondary },
-              dateRange === 'today' && [styles.filterPillTextActive, { color: isDark ? '#111827' : '#FFFFFF', fontWeight: '700' }],
-            ]}
-          >
-            Hoy
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[
-            styles.filterPill,
-            { backgroundColor: colors.surface, borderColor: colors.border },
-            dateRange === '7days' && [styles.filterPillActive, { backgroundColor: colors.primary, borderColor: colors.primary }],
-          ]}
-          onPress={() => setDateRange('7days')}
-        >
-          <Text
-            style={[
-              styles.filterPillText,
-              { color: colors.textSecondary },
-              dateRange === '7days' && [styles.filterPillTextActive, { color: isDark ? '#111827' : '#FFFFFF', fontWeight: '700' }],
-            ]}
-          >
-            Últimos 7 días
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[
-            styles.filterPill,
-            { backgroundColor: colors.surface, borderColor: colors.border },
-            dateRange === '30days' && [styles.filterPillActive, { backgroundColor: colors.primary, borderColor: colors.primary }],
-          ]}
-          onPress={() => setDateRange('30days')}
-        >
-          <Text
-            style={[
-              styles.filterPillText,
-              { color: colors.textSecondary },
-              dateRange === '30days' && [styles.filterPillTextActive, { color: isDark ? '#111827' : '#FFFFFF', fontWeight: '700' }],
-            ]}
-          >
-            Últimos 30 días
-          </Text>
-        </TouchableOpacity>
+        {REPORT_DATE_RANGE_OPTIONS.map((option) => {
+          const isActive = dateRange === option.key;
+          return (
+            <TouchableOpacity
+              key={option.key}
+              style={[
+                styles.filterPill,
+                { backgroundColor: colors.surface, borderColor: colors.border },
+                isActive && [styles.filterPillActive, { backgroundColor: colors.primary, borderColor: colors.primary }],
+              ]}
+              onPress={() => setDateRange(option.key)}
+            >
+              <Text
+                style={[
+                  styles.filterPillText,
+                  { color: colors.textSecondary },
+                  isActive && [styles.filterPillTextActive, { color: isDark ? '#111827' : '#FFFFFF', fontWeight: '700' }],
+                ]}
+              >
+                {option.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
       </View>
 
       {/* Selector de Sucursal para Inspección (Sin scroll horizontal - flexWrap) */}
@@ -333,6 +292,7 @@ const styles = StyleSheet.create({
   },
   filterRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     paddingHorizontal: 16,
     paddingVertical: 8,
     gap: 8,

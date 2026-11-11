@@ -13,6 +13,21 @@ import { TokenPayload } from '../../utils/tokens';
 
 export class OrdersService {
   /**
+   * Verifica que exista un turno de caja abierto en la sucursal antes de operar como cajero
+   */
+  private static async ensureActiveCashShift(trx: any, branchId: number): Promise<void> {
+    const openShift = await trx('cash_shifts')
+      .where({ branch_id: branchId, status: 'OPEN' })
+      .first();
+
+    if (!openShift) {
+      throw new UnprocessableEntityError(
+        'No hay una caja activa en la sucursal. Abrí un turno de caja antes de cobrar o aceptar pedidos.'
+      );
+    }
+  }
+
+  /**
    * Crea un nuevo pedido con transacción atómica, numeración secuencial protegida y cálculo de precios del servidor
    */
   public static async createOrder(
@@ -50,6 +65,10 @@ export class OrdersService {
 
     // Ejecutar todo dentro de una transaccion
     return db.transaction(async (trx) => {
+      if (isCashier) {
+        await OrdersService.ensureActiveCashShift(trx, payload.branchId);
+      }
+
       // 1. Numeración secuencial con bloqueo de fila
       let counterRecord: any;
       if (isMySql) {
@@ -301,6 +320,9 @@ export class OrdersService {
       if (currentUser.role === 'CASHIER' && order.branch_id !== currentUser.branchId) {
         throw new ForbiddenError('No podés cobrar un pedido perteneciente a otra sucursal');
       }
+      if (currentUser.role === 'CASHIER') {
+        await OrdersService.ensureActiveCashShift(trx, order.branch_id);
+      }
       if (order.payment_status === 'PAID') {
         throw new UnprocessableEntityError('El pedido ya se encuentra cobrado');
       }
@@ -381,6 +403,9 @@ export class OrdersService {
 
       if (['CASHIER', 'MANAGER'].includes(currentUser.role) && order.branch_id !== currentUser.branchId) {
         throw new ForbiddenError('No podés verificar pagos correspondientes a otra sucursal');
+      }
+      if (currentUser.role === 'CASHIER') {
+        await OrdersService.ensureActiveCashShift(trx, order.branch_id);
       }
 
       if (order.status === 'CANCELLED') {
@@ -481,6 +506,9 @@ export class OrdersService {
 
       if (['CASHIER', 'BARISTA', 'MANAGER'].includes(currentUser.role) && order.branch_id !== currentUser.branchId) {
         throw new ForbiddenError('No tenés permisos para modificar pedidos de otra sucursal');
+      }
+      if (currentUser.role === 'CASHIER') {
+        await OrdersService.ensureActiveCashShift(trx, order.branch_id);
       }
 
       const currentStatus = order.status;
