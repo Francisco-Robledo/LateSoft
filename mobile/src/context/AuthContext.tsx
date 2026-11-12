@@ -87,6 +87,7 @@ interface AuthContextType extends AuthState {
   socialLogin: (data: { provider: 'GOOGLE' | 'FACEBOOK' | 'GITHUB' | 'DISCORD'; idToken?: string; accessToken?: string; code?: string; redirectUri?: string }) => Promise<void>;
   logout: () => Promise<void>;
   updateProfile: (data: { fullName?: string; phone?: string }) => Promise<void>;
+  changeEmail: (newEmail: string, currentPassword: string) => Promise<void>;
   devSwitchUser: (targetRole: Role, branchNumber?: number) => Promise<void>;
 }
 
@@ -211,6 +212,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     dispatch({ type: 'UPDATE_USER', payload: res.data.user });
   };
 
+  const changeEmail = async (newEmail: string, currentPassword: string) => {
+    const res = await apiClient.post('/users/me/email', {
+      newEmail: newEmail.trim().toLowerCase(),
+      currentPassword,
+    });
+    dispatch({ type: 'UPDATE_USER', payload: res.data.user });
+  };
+
   // Selector de usuarios de prueba en desarrollo
   const devSwitchUser = async (targetRole: Role, branchNumber: number = 1) => {
     let email = 'cliente@gmail.com';
@@ -231,6 +240,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         socialLogin,
         logout,
         updateProfile,
+        changeEmail,
         devSwitchUser,
       }}
     >

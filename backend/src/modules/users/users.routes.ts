@@ -6,6 +6,7 @@ import {
   createUserSchema,
   updateUserSchema,
   updateMeSchema,
+  changeMyEmailSchema,
   queryUsersSchema,
 } from './users.schema';
 
@@ -24,6 +25,20 @@ router.post(
   '/me',
   validateRequest(updateMeSchema),
   UsersController.updateMe
+);
+
+router.patch(
+  '/me/email',
+  authorize('CUSTOMER'),
+  validateRequest(changeMyEmailSchema),
+  UsersController.changeMyEmail
+);
+
+router.post(
+  '/me/email',
+  authorize('CUSTOMER'),
+  validateRequest(changeMyEmailSchema),
+  UsersController.changeMyEmail
 );
 
 // Administracion de usuarios (ADMIN y MANAGER) - POST obligatorio

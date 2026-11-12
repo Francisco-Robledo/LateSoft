@@ -33,6 +33,13 @@ export const updateMeSchema = z.object({
   }),
 });
 
+export const changeMyEmailSchema = z.object({
+  body: z.object({
+    newEmail: z.string().trim().email('Ingresá un correo electrónico válido').max(150),
+    currentPassword: z.string().min(1, 'Ingresá tu contraseña actual'),
+  }),
+});
+
 export const queryUsersSchema = z.object({
   query: z.object({
     page: z.coerce.number().int().positive().default(1),

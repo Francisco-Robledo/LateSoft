@@ -55,4 +55,13 @@ export class UsersController {
       next(err);
     }
   }
+
+  public static async changeMyEmail(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const user = await UsersService.changeMyEmail(req.user!.sub, req.body, req.ip);
+      res.status(200).json({ user });
+    } catch (err) {
+      next(err);
+    }
+  }
 }

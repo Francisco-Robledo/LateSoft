@@ -4,6 +4,7 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
+  Modal,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,6 +18,7 @@ import { useTheme } from '../../src/context/ThemeContext';
 import { apiClient } from '../../src/api/client';
 import { formatPrice } from '../../src/utils/format';
 import {
+  isValidEmail,
   sanitizeName,
   sanitizePhone,
   validateFullName,
@@ -25,7 +27,7 @@ import {
 
 export default function CustomerProfileScreen() {
   const router = useRouter();
-  const { user, updateProfile, logout } = useAuth();
+  const { user, updateProfile, changeEmail, logout } = useAuth();
   const { showPopup, showConfirm } = usePopup();
   const { themeMode, setThemeMode, colors, isDark } = useTheme();
 
@@ -36,6 +38,13 @@ export default function CustomerProfileScreen() {
   const [phoneError, setPhoneError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [loyalty, setLoyalty] = useState<{ pointsBalance: number; lifetimePoints: number } | null>(null);
+
+  const [isEmailModalVisible, setIsEmailModalVisible] = useState(false);
+  const [newEmail, setNewEmail] = useState('');
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newEmailError, setNewEmailError] = useState<string | null>(null);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [isChangingEmail, setIsChangingEmail] = useState(false);
 
   React.useEffect(() => {
     apiClient.post('/loyalty/me')
@@ -90,6 +99,66 @@ export default function CustomerProfileScreen() {
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const openEmailModal = () => {
+    setNewEmail('');
+    setCurrentPassword('');
+    setNewEmailError(null);
+    setPasswordError(null);
+    setIsEmailModalVisible(true);
+  };
+
+  const validateNewEmailField = (value: string): string | null => {
+    const cleaned = value.trim().toLowerCase();
+    if (!isValidEmail(cleaned)) {
+      return 'Ingresá un correo electrónico válido.';
+    }
+    if (user?.email && cleaned === user.email.toLowerCase()) {
+      return 'El nuevo correo debe ser distinto al actual.';
+    }
+    return null;
+  };
+
+  const handleRequestEmailChange = () => {
+    const eErr = validateNewEmailField(newEmail);
+    const pErr = currentPassword ? null : 'Ingresá tu contraseña actual para confirmar.';
+    setNewEmailError(eErr);
+    setPasswordError(pErr);
+
+    if (eErr || pErr) {
+      return;
+    }
+
+    const cleanEmail = newEmail.trim().toLowerCase();
+    showConfirm({
+      title: 'Confirmar cambio de email',
+      message: `¿Confirmás cambiar el correo de tu cuenta a "${cleanEmail}"? A partir de ahora vas a iniciar sesión con ese correo.`,
+      confirmText: 'Cambiar email',
+      cancelText: 'Cancelar',
+      onConfirm: async () => {
+        setIsChangingEmail(true);
+        try {
+          await changeEmail(cleanEmail, currentPassword);
+          setIsEmailModalVisible(false);
+          setNewEmail('');
+          setCurrentPassword('');
+          showPopup({
+            title: 'Email actualizado',
+            message: `Tu correo electrónico fue actualizado a ${cleanEmail}.`,
+            type: 'success',
+          });
+        } catch (err: any) {
+          showPopup({
+            title: 'No se pudo cambiar el email',
+            message: err.message || 'Verificá tu contraseña actual e intentá nuevamente.',
+            type: 'error',
+          });
+        } finally {
+          setIsChangingEmail(false);
+        }
+      },
+    });
   };
 
   const handleLogout = () => {
@@ -231,6 +300,17 @@ export default function CustomerProfileScreen() {
           </View>
           <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
         </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.menuRow, { borderBottomWidth: 0 }]}
+          onPress={openEmailModal}
+        >
+          <View style={styles.menuRowLeft}>
+            <Ionicons name="mail-outline" size={20} color={colors.primary} />
+            <Text style={[styles.menuRowText, { color: colors.text }]}>Cambiar correo electrónico</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+        </TouchableOpacity>
       </Card>
 
       {/* Selector de Modo Claro / Oscuro */}
@@ -322,6 +402,64 @@ export default function CustomerProfileScreen() {
         style={styles.logoutBtn}
         icon={<Ionicons name="log-out-outline" size={18} color="#FFF" />}
       />
+
+      <Modal
+        visible={isEmailModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setIsEmailModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
+            <Text style={[styles.modalTitle, { color: colors.text }]}>Cambiar correo electrónico</Text>
+            <Text style={[styles.modalSubtitle, { color: colors.textSecondary }]}>
+              Correo actual: {user?.email || 'No asignado'}
+            </Text>
+
+            <Input
+              label="Nuevo correo electrónico *"
+              placeholder="nuevo@email.com"
+              keyboardType="email-address"
+              autoCapitalize="none"
+              maxLength={150}
+              value={newEmail}
+              onChangeText={(txt) => {
+                const cleaned = txt.replace(/\s/g, '');
+                setNewEmail(cleaned);
+                if (newEmailError) setNewEmailError(validateNewEmailField(cleaned));
+              }}
+              onBlur={() => setNewEmailError(validateNewEmailField(newEmail))}
+              error={newEmailError || undefined}
+            />
+
+            <Input
+              label="Contraseña actual *"
+              placeholder="Ingresá tu contraseña actual"
+              secureTextEntry
+              value={currentPassword}
+              onChangeText={(txt) => {
+                setCurrentPassword(txt);
+                if (passwordError) setPasswordError(txt ? null : 'Ingresá tu contraseña actual para confirmar.');
+              }}
+              error={passwordError || undefined}
+            />
+
+            <Button
+              title="Actualizar correo"
+              onPress={handleRequestEmailChange}
+              isLoading={isChangingEmail}
+            />
+
+            <TouchableOpacity
+              style={styles.modalCancel}
+              onPress={() => setIsEmailModalVisible(false)}
+              disabled={isChangingEmail}
+            >
+              <Text style={[styles.modalCancelText, { color: colors.textSecondary }]}>Cancelar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </Screen>
   );
 }
@@ -509,6 +647,39 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   themeOptionText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    borderRadius: 16,
+    padding: 20,
+    maxWidth: 460,
+    width: '100%',
+    alignSelf: 'center',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  modalSubtitle: {
+    fontSize: 13,
+    marginTop: 4,
+    marginBottom: 14,
+  },
+  modalCancel: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 44,
+    padding: 10,
+    marginTop: 6,
+  },
+  modalCancelText: {
     fontSize: 13,
     fontWeight: '600',
   },

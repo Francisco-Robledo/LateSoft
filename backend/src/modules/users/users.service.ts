@@ -254,4 +254,72 @@ export class UsersService {
       .where({ id: userId })
       .first();
   }
+
+  /**
+   * Cambio de correo electrónico para clientes con confirmación de contraseña actual
+   */
+  public static async changeMyEmail(
+    userId: number,
+    payload: { newEmail: string; currentPassword: string },
+    ipAddress?: string
+  ) {
+    const user = await db('users').where({ id: userId }).first();
+    if (!user || !user.is_active) {
+      throw new NotFoundError('Usuario no encontrado');
+    }
+
+    if (user.role !== 'CUSTOMER') {
+      throw new ForbiddenError('Solo los clientes pueden cambiar su correo electrónico desde su perfil');
+    }
+
+    if (!user.password_hash) {
+      throw new ValidationError(
+        'Tu cuenta fue creada con inicio de sesión social y no tiene contraseña configurada para cambiar el email'
+      );
+    }
+
+    const isPasswordValid = await bcrypt.compare(payload.currentPassword, user.password_hash);
+    if (!isPasswordValid) {
+      throw new ForbiddenError('La contraseña actual es incorrecta');
+    }
+
+    const normalizedEmail = payload.newEmail.trim().toLowerCase();
+    if (normalizedEmail === user.email) {
+      throw new ValidationError('El nuevo correo electrónico debe ser distinto al actual');
+    }
+
+    const existing = await db('users')
+      .where({ email: normalizedEmail })
+      .whereNot({ id: userId })
+      .first();
+    if (existing) {
+      throw new ConflictError('Ya existe una cuenta registrada con ese correo electrónico');
+    }
+
+    await db.transaction(async (trx) => {
+      await trx('users').where({ id: userId }).update({ email: normalizedEmail });
+
+      await trx('audit_logs').insert({
+        user_id: userId,
+        branch_id: null,
+        action: 'USER_EMAIL_CHANGED',
+        entity_type: 'USER',
+        entity_id: userId,
+        details: JSON.stringify({
+          previous_email: user.email,
+          new_email: normalizedEmail,
+        }),
+        ip_address: ipAddress || null,
+      });
+    });
+
+    return {
+      id: user.id,
+      fullName: user.full_name,
+      email: normalizedEmail,
+      role: user.role,
+      branchId: user.branch_id,
+      phone: user.phone,
+    };
+  }
 }
